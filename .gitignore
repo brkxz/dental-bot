@@ -1,0 +1,13 @@
+
+node_modules/
+.env
+.wwebjs_auth/
+.wwebjs_cache/
+*.json
+!package.json
+check_db.js
+test_sync.js
+debug_doctors.js
+test_elio.js
+test_variations.js
+test_date_format.js
