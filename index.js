@@ -138,6 +138,22 @@ const server = http.createServer(async (req, res) => {
     try {
         const url = new URL(req.url, `http://${req.headers.host}`);
         
+        // Ruta raíz - Estado del Bot
+        if (url.pathname === '/' || url.pathname === '') {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            if (lastQR) {
+                const qrImage = await QRCode.toDataURL(lastQR);
+                res.end(`<html><head><title>Bot Odontología</title><meta http-equiv="refresh" content="15"><style>${estilos}</style></head>
+                <body><h2>🏥 Bot WhatsApp - Odontología</h2><img src="${qrImage}" width="300"/><br>
+                <div class="ok" style="background:#25D366">${botStatus}</div></body></html>`);
+            } else {
+                const color = botStatus.includes('✅') ? '#25D366' : '#f39c12';
+                res.end(`<html><head><title>Bot Odontología</title><meta http-equiv="refresh" content="4"><style>${estilos}</style></head>
+                <body><h2>🏥 Bot WhatsApp - Odontología</h2><div class="ok" style="background:${color}">${botStatus}</div></body></html>`);
+            }
+            return;
+        }
+
         // Ruta panel
         if (url.pathname === '/panel') {
             const html = fs.readFileSync(path.join(__dirname, 'panel.html'), 'utf8');
@@ -233,18 +249,25 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        // Página de estado / QR
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        if (lastQR) {
-            const qrImage = await QRCode.toDataURL(lastQR);
-            res.end(`<html><head><title>Bot Odontología</title><meta http-equiv="refresh" content="15"><style>${estilos}</style></head>
-            <body><h2>🏥 Bot WhatsApp - Odontología</h2><img src="${qrImage}" width="300"/><br>
-            <div class="ok" style="background:#25D366">${botStatus}</div></body></html>`);
-        } else {
-            const color = botStatus.includes('✅') ? '#25D366' : '#f39c12';
-            res.end(`<html><head><title>Bot Odontología</title><meta http-equiv="refresh" content="4"><style>${estilos}</style></head>
-            <body><h2>🏥 Bot WhatsApp - Odontología</h2><div class="ok" style="background:${color}">${botStatus}</div></body></html>`);
+        // Página de estado / QR (Legacy)
+        if (url.pathname === '/qr') {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            if (lastQR) {
+                const qrImage = await QRCode.toDataURL(lastQR);
+                res.end(`<html><head><title>Bot Odontología</title><meta http-equiv="refresh" content="15"><style>${estilos}</style></head>
+                <body><h2>🏥 Bot WhatsApp - Odontología</h2><img src="${qrImage}" width="300"/><br>
+                <div class="ok" style="background:#25D366">${botStatus}</div></body></html>`);
+            } else {
+                const color = botStatus.includes('✅') ? '#25D366' : '#f39c12';
+                res.end(`<html><head><title>Bot Odontología</title><meta http-equiv="refresh" content="4"><style>${estilos}</style></head>
+                <body><h2>🏥 Bot WhatsApp - Odontología</h2><div class="ok" style="background:${color}">${botStatus}</div></body></html>`);
+            }
+            return;
         }
+
+        // Si no es ninguna de las anteriores, devolver 404
+        res.statusCode = 404;
+        res.end('Not Found');
 
     } catch (error) {
         console.error('Error en servidor HTTP:', error);
