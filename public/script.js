@@ -284,6 +284,48 @@ function eliminarHorario(fecha, hora) {
     .catch(() => { renderPanel(getData()); showDocAlert('🗑️ Eliminado (local)', 'success'); });
 }
 
+let confirmCallback = null;
+function mostrarConfirmacion(titulo, mensaje, onConfirm) {
+    document.getElementById('confirmModalTitle').innerText = titulo;
+    document.getElementById('confirmModalText').innerText = mensaje;
+    document.getElementById('confirmModal').style.display = 'flex';
+    confirmCallback = onConfirm;
+}
+
+document.getElementById('confirmBtnNo').addEventListener('click', () => {
+    document.getElementById('confirmModal').style.display = 'none';
+    confirmCallback = null;
+});
+
+document.getElementById('confirmBtnYes').addEventListener('click', () => {
+    document.getElementById('confirmModal').style.display = 'none';
+    if(confirmCallback) confirmCallback();
+    confirmCallback = null;
+});
+
+function limpiarPanelActual() {
+    mostrarConfirmacion(
+        'Limpiar Panel de Horarios', 
+        'Vas a eliminar TODOS los horarios visuales del panel actual. Las citas agendadas NO se borrarán de la base de datos.',
+        () => {
+            const doctor = DOCTORES[doctorActual]; const ddata = getDoctorData(doctor);
+            ddata.horarios = {}; // Vaciar todos los horarios
+            saveDoctorData(doctor, ddata);
+            
+            fetch('/guardar-horarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ doctor, dias: ddata.dias, horarios: ddata.horarios }) })
+            .then(() => {
+                loadHorariosDelServidor().then(data => renderPanel(data));
+                cargarEstadisticas();
+                showDocAlert('🗑️ Panel vaciado completamente', 'success');
+            })
+            .catch(() => {
+                renderPanel(getData());
+                showDocAlert('🗑️ Panel vaciado (local)', 'success');
+            });
+        }
+    );
+}
+
 function renderPanel(dataDelServidor) {
     const data = dataDelServidor || getData(); const doctor = DOCTORES[doctorActual];
     const ddata = data[doctor] || { dias:[true,true,true,true,true,false,false], horarios:{} };

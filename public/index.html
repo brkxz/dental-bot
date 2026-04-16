@@ -82,6 +82,21 @@
     </div>
 
     <!-- ══════════════════════════════════════════════ -->
+    <!-- MODAL DE CONFIRMACIÓN CUSTOM                   -->
+    <!-- ══════════════════════════════════════════════ -->
+    <div id="confirmModal" class="qr-modal" style="display:none; z-index:9999; backdrop-filter: blur(8px); background: rgba(11,15,25,0.7);">
+        <div class="qr-modal-content" style="max-width: 360px; text-align: center; border: 1px solid rgba(212,99,122,0.15); box-shadow: 0 20px 40px -10px rgba(212,99,122,0.1), inset 0 1px 0 rgba(255,255,255,0.05); padding: 32px 24px;">
+            <div style="font-size: 42px; color: #C97A8A; margin-bottom: 16px; filter: drop-shadow(0 4px 12px rgba(212,99,122,0.3));"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <h2 id="confirmModalTitle" style="font-size:18px;font-weight:700;margin-bottom:8px; color: #F8FAFC; letter-spacing: -0.01em;">¿Estás seguro?</h2>
+            <p id="confirmModalText" style="font-size:13px;color:#94A3B8;margin-bottom:28px; line-height: 1.6;"></p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button id="confirmBtnNo" class="doc-btn" style="flex:1; background:rgba(148,163,184,0.08); color:#94A3B8; border: 1px solid rgba(148,163,184,0.15);">Cancelar</button>
+                <button id="confirmBtnYes" class="doc-btn doc-btn-danger" style="flex:1; display:flex; justify-content:center; align-items:center; box-shadow: 0 4px 12px rgba(212,99,122,0.2);"><i class="fa-solid fa-eraser" style="margin-right:6px"></i> Sí, limpiar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════ -->
     <!-- TAB 1: RECORDATORIOS                          -->
     <!-- ══════════════════════════════════════════════ -->
     <main id="tab-recordatorios" class="main-content tab-content" style="display:none;">
@@ -304,8 +319,15 @@
 
             <!-- Horarios Registrados -->
             <div class="doc-card doc-full">
-                <h3>📋 Horarios Registrados — <span id="subtitleDoctor" style="color:#5BA4B5"></span></h3>
-                <p class="doc-sub">Cada hora muestra si está libre o quién tiene la cita asignada</p>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+                    <div>
+                        <h3>📋 Horarios Registrados — <span id="subtitleDoctor" style="color:#5BA4B5"></span></h3>
+                        <p class="doc-sub">Cada hora muestra si está libre o quién tiene la cita asignada</p>
+                    </div>
+                    <button class="doc-btn" onclick="limpiarPanelActual()" style="background:linear-gradient(135deg, rgba(212,99,122,0.12), rgba(212,99,122,0.05)); color:#C97A8A; border:1px solid rgba(212,99,122,0.25); font-size:13px; font-weight:600; padding:8px 16px; border-radius:12px; transition:all 0.3s ease; box-shadow:0 4px 12px rgba(212,99,122,0.05);" onmouseover="this.style.background='rgba(212,99,122,0.15)'; this.style.transform='translateY(-1px)';" onmouseout="this.style.background='linear-gradient(135deg, rgba(212,99,122,0.12), rgba(212,99,122,0.05))'; this.style.transform='none';">
+                        <i class="fa-solid fa-eraser" style="margin-right:6px; opacity:0.8;"></i>Limpiar Panel
+                    </button>
+                </div>
                 <div id="listaHorarios">
                     <div class="doc-empty">No hay horarios registrados</div>
                 </div>

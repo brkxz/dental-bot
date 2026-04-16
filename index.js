@@ -638,11 +638,18 @@ client.on('message', (msg) => {
                 response = bienvenida.msg;
             }
             else if (state.step === 'pedir_nombre') {
+                const textLower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const palabrasProhibidas = ['cita', 'por favor', 'quiero', 'necesito', 'agendar', 'turno', 'sacar', 'hola', 'buenas', 'buenos', 'favor', 'ayuda', 'para'];
+                const contieneProhibida = palabrasProhibidas.some(p => textLower.includes(p));
+                const numPalabras = text.trim().split(/\s+/).length;
+
                 const soloLetras = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.]+$/;
                 if (!soloLetras.test(text)) {
                     response = '❌ El nombre solo debe contener *letras*, sin números ni caracteres especiales.\n\n📝 *Ejemplo correcto:* Juan Pérez García\n❌ *Ejemplo incorrecto:* Ju4n P3rez 123\n\nPor favor, escribe tu *Nombre y Apellido* nuevamente:';
-                } else if (text.length < 5 || !text.trim().includes(' ')) {
-                    response = '❌ Por favor, escribe tu *Nombre y Apellido* completo:\n\n*Ejemplo:* Juan Pérez García';
+                } else if (contieneProhibida) {
+                    response = '❌ Por favor, escribe *únicamente* el Nombre y Apellido del paciente.\n\nEvita usar frases como "quiero una cita", "por favor", saludos, etc.\n\n📝 *Ejemplo:* Juan Pérez García';
+                } else if (text.length < 5 || numPalabras < 2 || numPalabras > 5) {
+                    response = '❌ Por favor, escribe un *Nombre y Apellido* válido (completo, entre 2 y 5 palabras):\n\n*Ejemplo:* Juan Pérez García';
                 } else {
                     userState[phone].data.nombre = text;
                     response = `Hola *${text}* 😊\n\n🪪 Escribe tu *DNI* (8 dígitos):`;
@@ -656,15 +663,36 @@ client.on('message', (msg) => {
                     response = '❌ *Error de conexión con el sistema.* Por favor inténtalo de nuevo más tarde.';
                     userState[phone] = { step: 'pedir_nombre', data: {} };
                 } else {
-                    const [citaExistente] = await db.execute('SELECT nombre, doctor, fecha, hora FROM citas WHERE dni=? AND estado="confirmada" LIMIT 1', [text]);
+                    // Check 1: DNI ya tiene cita confirmada
+                    const [citaExistente] = await db.execute(`SELECT nombre, doctor, fecha, hora FROM citas WHERE dni=? AND estado='confirmada' LIMIT 1`, [text]);
                     if (citaExistente.length > 0) {
                         const cita = citaExistente[0];
                         response = `⚠️ *El paciente con DNI ${text} ya tiene una cita registrada:*\n\n👤 *Paciente:* ${cita.nombre}\n👨‍⚕️ *Doctor:* ${cita.doctor}\n📅 *Fecha:* ${formatFechaBot(cita.fecha)}\n⏰ *Hora:* ${formatHoraBot(cita.hora)}\n\nNo es posible registrar otra cita con el mismo DNI.\n\n👉 Escribe *CITA* para agendar con otro paciente.`;
                         userState[phone] = { step: 'pedir_nombre', data: {} };
                     } else {
-                        userState[phone].data.dni = text;
-                        response = `✅ ¡Anotado!\n\n🎂 ¿Cuántos años tiene el paciente?`;
-                        userState[phone].step = 'pedir_edad';
+                        // Check 2: Teléfono registró cita en los últimos 10 días
+                        let telCheck = phone.replace(/@.*$/, '').replace(/\D/g, '');
+                        if (telCheck.startsWith('51') && telCheck.length === 11) telCheck = telCheck.slice(2);
+                        const ahoraUtc = new Date();
+                        const ahoraLima = new Date(ahoraUtc.getTime() - 5 * 60 * 60 * 1000);
+                        const hoyLima = ahoraLima.toISOString().split('T')[0];
+                        const [citaReciente] = await db.execute(
+                            `SELECT nombre, doctor, fecha, hora, created_at FROM citas WHERE telefono=? AND estado='confirmada' AND fecha >= DATE_SUB(?, INTERVAL 10 DAY) ORDER BY fecha DESC LIMIT 1`,
+                            [telCheck, hoyLima]
+                        );
+                        if (citaReciente.length > 0) {
+                            const cr = citaReciente[0];
+                            const fechaCita = new Date(String(cr.fecha).split('T')[0] + 'T12:00:00');
+                            const hoyDate = new Date(hoyLima + 'T12:00:00');
+                            const diasPasados = Math.floor((hoyDate - fechaCita) / (1000 * 60 * 60 * 24));
+                            const diasRestantes = 10 - diasPasados;
+                            response = `⚠️ *Ya registraste una cita recientemente desde este número:*\n\n👤 *Paciente:* ${cr.nombre}\n👨‍⚕️ *Doctor:* ${cr.doctor}\n📅 *Fecha:* ${formatFechaBot(cr.fecha)}\n⏰ *Hora:* ${formatHoraBot(cr.hora)}\n\n🕐 Podrás registrar una nueva cita en *${diasRestantes > 0 ? diasRestantes : 1} día(s)*.`;
+                            userState[phone] = { step: 'pedir_nombre', data: {} };
+                        } else {
+                            userState[phone].data.dni = text;
+                            response = `✅ ¡Anotado!\n\n🎂 ¿Cuántos años tiene el paciente?`;
+                            userState[phone].step = 'pedir_edad';
+                        }
                     }
                 }
             }
