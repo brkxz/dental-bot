@@ -343,6 +343,13 @@ const reservasTemp = {};
 const userQueues = {};
 const mensajesProcesados = new Set();
 
+// Cache de disponibilidad (30 segundos)
+const availCache = { data: {}, ts: 0 };
+const CACHE_TTL = 30000;
+function invalidateCache() { availCache.ts = 0; availCache.data = {}; }
+function getCachedAvail(key) { return (Date.now() - availCache.ts < CACHE_TTL) ? availCache.data[key] : null; }
+function setCachedAvail(key, val) { availCache.data[key] = val; availCache.ts = Date.now(); }
+
 function claveReserva(fecha, hora, doctor) { return `${fecha}|${hora}|${doctor}`; }
 function liberarReserva(clave) {
     if (reservasTemp[clave]) { clearTimeout(reservasTemp[clave].timer); delete reservasTemp[clave]; }
@@ -390,6 +397,9 @@ function formatHoraBot(h) {
 
 async function getFechasDisponibles(doctor) {
     if (!db) return { fechas: [], texto: '' };
+    const cacheKey = `fechas_${doctor}`;
+    const cached = getCachedAvail(cacheKey);
+    if (cached) return cached;
     const panel = horariosPanel[doctor];
     if (!panel || !panel.horarios || !Object.keys(panel.horarios).length) return { fechas: [], texto: '' };
     const ahoraUtc = new Date();
@@ -407,13 +417,18 @@ async function getFechasDisponibles(doctor) {
         }
         return true;
     }).sort();
+    if (!todasFechas.length) return { fechas: [], texto: '' };
+    // UNA SOLA consulta para TODAS las fechas del doctor
+    const [ocupadas] = await db.execute(
+        `SELECT fecha, hora FROM citas WHERE doctor=? AND estado='confirmada' AND fecha >= ?`,
+        [doctor, hoyLima]
+    );
+    const ocupadasSet = new Set(ocupadas.map(r => `${String(r.fecha).split('T')[0]}|${r.hora.substring(0,5)}`));
     const fechasConLibres = [];
     for (const fecha of todasFechas) {
         const horasPanel = panel.horarios[fecha];
-        const [ocupadas] = await db.execute('SELECT hora FROM citas WHERE fecha=? AND doctor=? AND estado="confirmada"', [fecha, doctor]);
-        const ocupadasList = ocupadas.map(r => r.hora.substring(0, 5));
         const libres = horasPanel.filter(h => {
-            if (ocupadasList.includes(h)) return false;
+            if (ocupadasSet.has(`${fecha}|${h}`)) return false;
             if (fecha === hoyLima && h <= horaAhoraLima) return false;
             return true;
         });
@@ -421,15 +436,20 @@ async function getFechasDisponibles(doctor) {
     }
     let texto = '';
     fechasConLibres.forEach((f, i) => { texto += `${i + 1}. ${formatFechaBot(f)}\n`; });
-    return { fechas: fechasConLibres, texto };
+    const result = { fechas: fechasConLibres, texto };
+    setCachedAvail(cacheKey, result);
+    return result;
 }
 
 async function getHorasDisponiblesPanel(fecha, doctor) {
     if (!db) return { horas: [], texto: '' };
+    const cacheKey = `horas_${doctor}_${fecha}`;
+    const cached = getCachedAvail(cacheKey);
+    if (cached) return cached;
     const panel = horariosPanel[doctor];
     if (!panel || !panel.horarios || !panel.horarios[fecha]) return { horas: [], texto: '' };
     const todasHoras = panel.horarios[fecha];
-    const [ocupadas] = await db.execute('SELECT hora FROM citas WHERE fecha=? AND doctor=? AND estado="confirmada"', [fecha, doctor]);
+    const [ocupadas] = await db.execute(`SELECT hora FROM citas WHERE fecha=? AND doctor=? AND estado='confirmada'`, [fecha, doctor]);
     const ocupadasList = ocupadas.map(r => r.hora.substring(0, 5));
     const _ahoraUtc = new Date();
     const _ahoraLima = new Date(_ahoraUtc.getTime() - 5 * 60 * 60 * 1000);
@@ -442,35 +462,40 @@ async function getHorasDisponiblesPanel(fecha, doctor) {
     let textoFinal = ''; let idx = 1;
     if (manana.length) { textoFinal += `🌅 *Turno Mañana*\n`; manana.forEach(h => { textoFinal += ` ${idx++}. ${formatHoraBot(h)} ✅\n`; }); }
     if (tarde.length) { textoFinal += `\n🌇 *Turno Tarde*\n`; tarde.forEach(h => { textoFinal += ` ${idx++}. ${formatHoraBot(h)} ✅\n`; }); }
-    return { horas, texto: textoFinal };
+    const result = { horas, texto: textoFinal };
+    setCachedAvail(cacheKey, result);
+    return result;
 }
 
 async function getBienvenida(botActivoOverride = true) {
     let avisos = ''; let hayAlgunasCitas = false;
     if (botActivoOverride) {
-        let hayGeneral = false;
-        for (const doc of doctoresGeneral) { const fm = await getFechasDisponibles(doc); if (fm.fechas.length > 0) { hayGeneral = true; break; } }
+        // Consultar TODOS los doctores en paralelo para máxima velocidad
+        const [generalResults, pediatriaResults] = await Promise.all([
+            Promise.all(doctoresGeneral.map(d => getFechasDisponibles(d))),
+            Promise.all(doctoresPediatria.map(d => getFechasDisponibles(d)))
+        ]);
+        const hayGeneral = generalResults.some(fm => fm.fechas.length > 0);
+        const hayPediatria = pediatriaResults.some(fm => fm.fechas.length > 0);
         avisos += hayGeneral ? `\n\n✅ *Hay citas disponibles para Odontología General.*` : `\n\n⚠️ *No hay citas disponibles para Odontología General.*`;
-        if (hayGeneral) hayAlgunasCitas = true;
-        let hayPediatria = false;
-        for (const doc of doctoresPediatria) { const fm = await getFechasDisponibles(doc); if (fm.fechas.length > 0) { hayPediatria = true; break; } }
         avisos += hayPediatria ? `\n\n✅ *Hay citas disponibles para Odontopediatría.*` : `\n\n⚠️ *No hay citas disponibles para Odontopediatría.*`;
-        if (hayPediatria) hayAlgunasCitas = true;
+        if (hayGeneral || hayPediatria) hayAlgunasCitas = true;
     }
     if (!botActivoOverride || !hayAlgunasCitas) {
         if (!botActivoOverride && botConfig.modoViernes) {
-            return `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, gracias por escribirnos.\n\n🕐 El bot está *desactivado* por el momento. Las citas se habilitan los *viernes a las 7:30 a.m.*\n\n⏳ ¡Escríbenos *hoy mismo a las 7:30 a.m.* para reservar tu cita!\n\n*Gracias por tu paciencia.*`;
+            return { msg: `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, gracias por escribirnos.\n\n🕐 El bot está *desactivado* por el momento. Las citas se habilitan los *viernes a las 7:30 a.m.*\n\n⏳ ¡Escríbenos *hoy mismo a las 7:30 a.m.* para reservar tu cita!\n\n*Gracias por tu paciencia.*`, hayAlgunasCitas: false };
         }
-        return `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, lo sentimos mucho pero ya no contamos con citas.${avisos}\n\n📞 *¡Escríbanos por favor el próximo viernes a las 7:30!*\n\n*Gracias por su comprensión.*`;
+        return { msg: `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, lo sentimos mucho pero ya no contamos con citas.${avisos}\n\n📞 *¡Escríbanos por favor el próximo viernes a las 7:30!*\n\n*Gracias por su comprensión.*`, hayAlgunasCitas: false };
     }
-    return `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 ¡Hola! Nos alegra atenderte.${avisos}\n\nPara registrar tu cita escribe los *nombres y apellidos* del paciente:`;
+    return { msg: `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 ¡Hola! Nos alegra atenderte.${avisos}\n\nPara registrar tu cita escribe los *nombres y apellidos* del paciente:`, hayAlgunasCitas: true };
 }
 
 async function agendarCita(telefono, nombre, dni, edad, consultorio, doctor, servicio, fecha, hora) {
     let telLimpio = telefono.replace('@c.us', '').replace(/\D/g, '');
     if (telLimpio.startsWith('51') && telLimpio.length === 11) telLimpio = telLimpio.slice(2);
-    await db.execute('INSERT INTO citas (telefono,nombre,dni,edad,consultorio,doctor,servicio,fecha,hora,estado) VALUES (?,?,?,?,?,?,?,?,?,"confirmada")',
+    await db.execute(`INSERT INTO citas (telefono,nombre,dni,edad,consultorio,doctor,servicio,fecha,hora,estado) VALUES (?,?,?,?,?,?,?,?,?,'confirmada')`,
         [telLimpio, nombre, dni, edad, consultorio, doctor, servicio || 'Consulta general', fecha, hora]);
+    invalidateCache(); // Limpiar cache al agendar
 }
 
 async function verificarDisponibilidad(fecha, hora, doctor, phoneActual) {
@@ -581,8 +606,8 @@ client.on('message', (msg) => {
             // Bot desactivado
             if (!botConfig.botActivo && state.step !== 'sin_citas' && !['menu','0','cancelar','hola','cita'].includes(text.toLowerCase())) {
                 userState[phone] = { step: 'sin_citas', data: {} };
-                const msgB = await getBienvenida(false);
-                await msg.reply(msgB);
+                const bienvenida = await getBienvenida(false);
+                await msg.reply(bienvenida.msg);
                 await msg.reply(`🚨 *Para casos de URGENCIA, sugerimos solicitar un cupo adicional.*\n\n📍 Los cupos adicionales se entregan de manera presencial todos los días en el consultorio de Odontología, a las *7:00 a.m.*, a las dos primeras personas en llegar.\n\n⚠️ *Ten en cuenta:*\n• Estos pacientes serán atendidos después de los pacientes con cita previa.\n\n🙏 Agradecemos mucho tu comprensión.`);
                 return;
             }
@@ -608,13 +633,9 @@ client.on('message', (msg) => {
                 userState[phone] = { step: 'pedir_nombre', data: {} };
             }
             else if (esNuevo || ['menu','0','hola','cita','buenas','buenos dias','buenas tardes','buenas noches'].includes(text.toLowerCase())) {
-                let hayAlgunasCitas = false;
-                if (botConfig.botActivo) {
-                    for (const doc of doctoresGeneral) { const fm = await getFechasDisponibles(doc); if (fm.fechas.length > 0) { hayAlgunasCitas = true; break; } }
-                    if (!hayAlgunasCitas) { for (const doc of doctoresPediatria) { const fm = await getFechasDisponibles(doc); if (fm.fechas.length > 0) { hayAlgunasCitas = true; break; } } }
-                }
-                userState[phone] = hayAlgunasCitas ? { step: 'pedir_nombre', data: {} } : { step: 'sin_citas', data: {} };
-                response = await getBienvenida(botConfig.botActivo);
+                const bienvenida = await getBienvenida(botConfig.botActivo);
+                userState[phone] = bienvenida.hayAlgunasCitas ? { step: 'pedir_nombre', data: {} } : { step: 'sin_citas', data: {} };
+                response = bienvenida.msg;
             }
             else if (state.step === 'pedir_nombre') {
                 const soloLetras = /^[a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s.]+$/;
@@ -848,7 +869,7 @@ client.on('message', (msg) => {
                 else if (step === 'elegir_fecha') { let t=''; (d.fechasOpciones||[]).forEach((f,i)=>{t+=`${i+1}. ${formatFechaBot(f)}\n`;}); response = `❌ Escribe un número del 1 al ${(d.fechasOpciones||[]).length}:\n\n${t}`; }
                 else if (step === 'cita_hora') response = `❌ Escribe un número del 1 al ${(d.horasOpciones||[]).length}:`;
                 else if (step === 'pedir_telefono') response = '❌ Escribe tu *número de celular* (9 dígitos, empieza con 9), o *CANCELAR*.';
-                else { userState[phone] = { step: 'pedir_nombre', data: {} }; response = await getBienvenida(botConfig.botActivo); }
+                else { userState[phone] = { step: 'pedir_nombre', data: {} }; const b = await getBienvenida(botConfig.botActivo); response = b.msg; }
             }
 
             await replyConTimeout(msg, response);
