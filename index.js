@@ -198,22 +198,37 @@ console.log('📅 Horarios cargados para', Object.keys(horariosPanel).length, 'd
 // ══════════════════════════════════════════════════════════════
 //  GOOGLE SHEETS (para recordatorios)
 // ══════════════════════════════════════════════════════════════
-// Soporta credenciales como variable de entorno (producción) o archivo local (desarrollo)
+// Prioridad: GOOGLE_CREDENTIALS_BASE64 > GOOGLE_CREDENTIALS_JSON > archivo local
 let googleCreds;
 let googleKeyFile = null;
-if (process.env.GOOGLE_CREDENTIALS_JSON) {
+
+if (process.env.GOOGLE_CREDENTIALS_BASE64) {
+    // ── Método preferido: Base64 (preserva private_key perfectamente) ──
+    try {
+        const decoded = Buffer.from(process.env.GOOGLE_CREDENTIALS_BASE64, 'base64').toString('utf8');
+        googleCreds = JSON.parse(decoded);
+        const tmpCredsPath = path.join(process.env.DATA_DIR || '/tmp', 'google-creds.json');
+        fs.mkdirSync(path.dirname(tmpCredsPath), { recursive: true });
+        fs.writeFileSync(tmpCredsPath, decoded);
+        googleKeyFile = tmpCredsPath;
+        console.log('🔑 Credenciales Google decodificadas desde BASE64 y escritas a:', tmpCredsPath);
+        console.log('🔑 Client email:', googleCreds.client_email);
+        console.log('🔑 Private key comienza con:', googleCreds.private_key?.substring(0, 30));
+    } catch (e) {
+        console.error('❌ Error decodificando GOOGLE_CREDENTIALS_BASE64:', e.message);
+        googleCreds = { client_email: '', private_key: '' };
+    }
+} else if (process.env.GOOGLE_CREDENTIALS_JSON) {
     try {
         googleCreds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
-        // Asegurar que los \n literales en private_key sean saltos de línea reales
         if (googleCreds.private_key && !googleCreds.private_key.includes('\n')) {
             googleCreds.private_key = googleCreds.private_key.replace(/\\n/g, '\n');
         }
-        // Escribir a archivo temporal para máxima compatibilidad con Google Auth
         const tmpCredsPath = path.join(process.env.DATA_DIR || '/tmp', 'google-creds.json');
         fs.mkdirSync(path.dirname(tmpCredsPath), { recursive: true });
         fs.writeFileSync(tmpCredsPath, JSON.stringify(googleCreds, null, 2));
         googleKeyFile = tmpCredsPath;
-        console.log('🔑 Credenciales Google escritas a archivo temporal');
+        console.log('🔑 Credenciales Google escritas a archivo temporal (JSON)');
     } catch (e) {
         console.error('❌ Error parseando GOOGLE_CREDENTIALS_JSON:', e.message);
         googleCreds = { client_email: '', private_key: '' };
