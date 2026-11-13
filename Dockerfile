@@ -1,22 +1,23 @@
-FROM node:18-alpine
+FROM node:18-slim
 
-# Dependencias del sistema para Baileys + git para npm
-RUN apk add --no-cache \
+# Dependencias del sistema
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
     git \
-    libc6-compat \
-    openssl
+    openssl \
+    ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Forzar HTTPS en lugar de SSH para git (evita bloqueos en la nube)
+# Forzar HTTPS en lugar de SSH para git
 RUN git config --global url."https://github.com/".insteadOf git@github.com: && \
-    git config --global url."https://github.com/".insteadOf ssh://git@github.com/ && \
-    git config --global url."https://".insteadOf git://
+    git config --global url."https://github.com/".insteadOf ssh://git@github.com/
 
-# Copiar package.json e instalar dependencias
+# Instalar dependencias
 COPY package.json package-lock.json* ./
 RUN npm install --production --no-audit --no-fund
 
@@ -26,7 +27,6 @@ COPY . .
 # Crear directorios necesarios
 RUN mkdir -p /tmp/data/auth_info_baileys /tmp/data/logs/conversaciones
 
-# Variables de entorno
 ENV NODE_ENV=production
 ENV DATA_DIR=/tmp/data
 ENV PORT=8080
