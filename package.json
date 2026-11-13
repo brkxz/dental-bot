@@ -1,6 +1,6 @@
 {
   "name": "drive-bot",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -11,6 +11,9 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "overrides": {
+    "libsignal": "https://github.com/WhiskeySockets/libsignal-node/archive/bcea72df9ec34d9d9140ab30619cf479c7c144c7.tar.gz"
+  },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^6.7.16",

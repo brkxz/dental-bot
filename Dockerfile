@@ -1,9 +1,10 @@
 FROM node:18-slim
 
-# Dependencias del sistema
+# Instalar herramientas de build + git
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
     python3 \
+    python-is-python3 \
     make \
     g++ \
     git \
@@ -13,13 +14,14 @@ RUN apt-get update -qq && \
 
 WORKDIR /app
 
-# Forzar HTTPS en lugar de SSH para git
+# Forzar HTTPS para git (evita bloqueos SSH en la nube)
 RUN git config --global url."https://github.com/".insteadOf git@github.com: && \
-    git config --global url."https://github.com/".insteadOf ssh://git@github.com/
+    git config --global url."https://github.com/".insteadOf ssh://git@github.com/ && \
+    git config --global url."https://".insteadOf git://
 
-# Instalar dependencias
-COPY package.json package-lock.json* ./
-RUN npm install --production --no-audit --no-fund
+# Instalar dependencias (sin package-lock para respetar overrides)
+COPY package.json ./
+RUN npm install --no-audit --no-fund
 
 # Copiar código fuente
 COPY . .
