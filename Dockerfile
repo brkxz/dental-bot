@@ -1,30 +1,30 @@
 FROM node:18-alpine
 
-# Dependencias del sistema para Baileys
+# Dependencias del sistema para Baileys (native crypto/sharp)
 RUN apk add --no-cache \
     python3 \
     make \
     g++ \
-    git
+    git \
+    libc6-compat
 
 WORKDIR /app
 
-# Instalar dependencias primero (cache de capas)
-COPY package*.json ./
-RUN npm ci --only=production
+# Instalar dependencias (npm install es más tolerante que npm ci)
+COPY package.json ./
+RUN npm install --only=production --no-audit --no-fund
 
 # Copiar código fuente
 COPY . .
 
-# Crear directorio de datos persistentes
-RUN mkdir -p /data/auth_info_baileys /data/logs/conversaciones
+# Crear directorios necesarios
+RUN mkdir -p /tmp/data/auth_info_baileys /tmp/data/logs/conversaciones
 
-# Variables de entorno
+# Variables de entorno por defecto (Fly.io las sobreescribe)
 ENV NODE_ENV=production
-ENV DATA_DIR=/data
-ENV PORT=3000
+ENV DATA_DIR=/tmp/data
+ENV PORT=8080
 
-EXPOSE 3000
+EXPOSE 8080
 
 CMD ["node", "index.js"]
-
