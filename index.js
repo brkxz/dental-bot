@@ -202,8 +202,14 @@ console.log('📅 Horarios cargados para', Object.keys(horariosPanel).length, 'd
 let googleCreds;
 if (process.env.GOOGLE_CREDENTIALS_JSON) {
     googleCreds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+    // Asegurar que los \n literales en private_key sean saltos de línea reales
+    if (googleCreds.private_key) {
+        googleCreds.private_key = googleCreds.private_key.replace(/\\n/g, '\n');
+    }
+    console.log('🔑 Credenciales Google cargadas desde env var');
 } else {
     googleCreds = require('./credenciales.json');
+    console.log('🔑 Credenciales Google cargadas desde archivo local');
 }
 
 const auth = new google.auth.GoogleAuth({
@@ -1333,7 +1339,7 @@ async function connectWhatsApp() {
                 keys: keyStore, // Reutilizar el mismo key store
             },
             printQRInTerminal: false,
-            logger: pino({ level: 'warn' }),  // Mostrar warnings para debugging
+            logger: pino({ level: 'silent' }),  // Silenciar logs internos de Baileys
             browser: ['Ubuntu', 'Chrome', '114.0.0'],
             generateHighQualityLinkPreview: false,
             markOnlineOnConnect: false,
