@@ -11,6 +11,11 @@ RUN apk add --no-cache \
 
 WORKDIR /app
 
+# Forzar HTTPS en lugar de SSH para git (evita bloqueos en la nube)
+RUN git config --global url."https://github.com/".insteadOf git@github.com: && \
+    git config --global url."https://github.com/".insteadOf ssh://git@github.com/ && \
+    git config --global url."https://".insteadOf git://
+
 # Copiar package.json e instalar dependencias
 COPY package.json package-lock.json* ./
 RUN npm install --production --no-audit --no-fund
