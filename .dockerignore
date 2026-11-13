@@ -1,0 +1,13 @@
+node_modules
+.wwebjs_auth
+.wwebjs_cache
+auth_info_baileys
+auth_info
+logs
+scratch
+*.pma
+.warmup_date
+.git
+*.md
+test_*.js
+

@@ -43,7 +43,7 @@ function switchTab(tabId) {
     if (tabId === 'doctores') {
         if (headerDoc) headerDoc.style.display = 'flex';
         if (headerRec) headerRec.style.display = 'none';
-        document.body.style.background = '#0B1120';
+        document.body.style.background = '';
         loadBotConfig();
         loadHorariosDelServidor().then(data => { renderPanel(data); cargarEstadisticas(); });
     } else {
@@ -71,6 +71,10 @@ function updateUI(status) {
     loadingStatus.classList.add('hidden');
     qrContainer.classList.add('hidden');
     botInfo.classList.add('hidden');
+    const logoutStatus = document.getElementById('logoutStatus');
+    const logoutConfirm = document.getElementById('logoutConfirm');
+    if (logoutStatus) logoutStatus.classList.add('hidden');
+    if (logoutConfirm) logoutConfirm.classList.add('hidden');
     connectionStatus.classList.remove('status-loading', 'status-qr', 'status-connected');
 
     // Doctor header WA pill
@@ -94,6 +98,11 @@ function updateUI(status) {
         // Auto-open QR modal
         const modal = document.getElementById('qrModal');
         if (modal) modal.style.display = 'flex';
+    } else if (status === 'closing') {
+        connectionStatus.classList.add('status-loading'); statusText.textContent = 'Cerrando...';
+        if (logoutStatus) logoutStatus.classList.remove('hidden');
+        waStatusDisplay.textContent = 'Cerrando'; waStatusDisplay.style.color = '#DC2626';
+        if (docText) docText.textContent = 'Cerrando...';
     } else {
         connectionStatus.classList.add('status-loading'); statusText.textContent = 'Iniciando...';
         loadingStatus.classList.remove('hidden'); waStatusDisplay.textContent = 'Iniciando'; waStatusDisplay.style.color = '#64748b';
@@ -164,7 +173,22 @@ autoToggle.addEventListener('change', (e) => {
     socket.emit('toggle_auto', e.target.checked); updateAutoStatusDisplay(e.target.checked);
     addLog(`Auto-envío ${e.target.checked ? 'ENCENDIDO' : 'APAGADO'}.`, e.target.checked ? 'success' : 'warning');
 });
-logoutBtn.addEventListener('click', () => { if (confirm('¿Cerrar sesión de WhatsApp?')) { socket.emit('logout'); updateUI('loading'); addLog('Cerrando sesión...', 'system'); } });
+// ── Logout flow with custom confirmation ──
+logoutBtn.addEventListener('click', () => {
+    const logoutConfirm = document.getElementById('logoutConfirm');
+    botInfo.classList.add('hidden');
+    logoutConfirm.classList.remove('hidden');
+});
+document.getElementById('logoutCancelBtn').addEventListener('click', () => {
+    document.getElementById('logoutConfirm').classList.add('hidden');
+    botInfo.classList.remove('hidden');
+});
+document.getElementById('logoutConfirmBtn').addEventListener('click', () => {
+    document.getElementById('logoutConfirm').classList.add('hidden');
+    updateUI('closing');
+    socket.emit('logout');
+    addLog('Cerrando sesión de WhatsApp...', 'warning');
+});
 refreshBtn.addEventListener('click', () => { socket.emit('refresh_session'); addLog('Refrescando sesión...', 'system'); });
 hourInput.addEventListener('change', updateCronTime);
 minuteInput.addEventListener('change', updateCronTime);
@@ -179,15 +203,17 @@ refreshPacientesBtn.addEventListener('click', () => {
 // ══════════════════════════════════════════════════════
 let botActivoState = false;
 let modoViernesState = false;
+let botSilenciadoState = false;
 const DOCTORES = [
     'C.D. Manuel Jesús Romani Maldonado',
     'C.D. Elio Elvis Támara Trinidad',
     'C.D. Jimy Aldo Osorio Rosales',
-    'C.D. Fernando Fredy Bustamante Tolentino'
+    'C.D. Fernando Fredy Bustamante Tolentino',
+    'C.D. Yolanda Guadalupe Aliaga Kriete'
 ];
 const DIAS_SEMANA = ['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
-const HORAS_MANANA = ['07:45','08:30','09:15','10:00','10:45','11:30'];
-const HORAS_TARDE = ['13:45','14:30','15:15','16:00','16:45','17:30'];
+const HORAS_MANANA = ['07:15','07:45','08:30','09:15','10:00','10:45','11:30','12:15'];
+const HORAS_TARDE = ['13:00','13:45','14:30','15:15','16:00','16:45','17:30','18:15'];
 let doctorActual = 0;
 
 function getData() { return JSON.parse(localStorage.getItem('panel_data') || '{}'); }
@@ -195,8 +221,34 @@ function saveData(d) { localStorage.setItem('panel_data', JSON.stringify(d)); }
 
 async function loadBotConfig() {
     try {
-        const r = await fetch('/config-bot'); if (r.ok) { const c = await r.json(); botActivoState = c.botActivo; modoViernesState = c.modoViernes || false; renderBotStatus(); renderModoViernes(); }
+        const r = await fetch('/config-bot'); if (r.ok) { const c = await r.json(); botActivoState = c.botActivo; modoViernesState = c.modoViernes || false; botSilenciadoState = c.botSilenciado || false; renderBotStatus(); renderModoViernes(); renderBotSilenciado(); }
     } catch(e) {}
+}
+function renderBotSilenciado() {
+    const btn = document.getElementById('botToggleRec');
+    const txt = document.getElementById('botToggleRecText');
+    const sub = document.getElementById('botStatusRecDisplay');
+    if (!btn) return;
+    if (botSilenciadoState) {
+        btn.style.background = '#FEF2F2'; btn.style.color = '#DC2626'; btn.style.border = '1px solid rgba(220,38,38,0.3)';
+        if (txt) txt.textContent = 'Activar Bot';
+        if (sub) { sub.textContent = '🔇 Bot silenciado — no responde mensajes'; sub.style.color = '#DC2626'; }
+    } else {
+        btn.style.background = '#F0FDF4'; btn.style.color = '#16A34A'; btn.style.border = '1px solid rgba(22,163,74,0.3)';
+        if (txt) txt.textContent = 'Silenciar Bot';
+        if (sub) { sub.textContent = '✅ Bot activo — responde mensajes'; sub.style.color = '#16A34A'; }
+    }
+}
+async function toggleBotFromRec() {
+    const nuevo = !botSilenciadoState;
+    const btn = document.getElementById('botToggleRec');
+    if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+    try {
+        const r = await fetch('/config-bot', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ botSilenciado: nuevo }) });
+        if (r.ok) { const d = await r.json(); botSilenciadoState = d.botSilenciado; addLog(botSilenciadoState ? '🔇 Bot SILENCIADO — no responderá mensajes.' : '✅ Bot REACTIVADO — responde mensajes.', botSilenciadoState ? 'warning' : 'success'); }
+    } catch(e) { addLog('❌ Error al cambiar estado del bot', 'error'); }
+    renderBotSilenciado();
+    if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
 }
 function renderBotStatus() {
     const btn = document.getElementById('btnActivarBot'); const txt = document.getElementById('botEstadoTexto');
@@ -450,4 +502,43 @@ filtrarHoras();
 loadBotConfig();
 loadHorariosDelServidor().then(data => { renderPanel(data); cargarEstadisticas(); }).catch(() => { renderPanel(); cargarEstadisticas(); });
 setInterval(cargarEstadisticas, 15000);
+// ══════════════════════════════════════════════════════
+//  SYNC DRIVE — Sincronizar citas → Google Apps Script
+// ══════════════════════════════════════════════════════
+async function sincronizarDrive() {
+    const btn = document.getElementById('btnSyncDrive');
+    if (!btn) return;
+
+    // Estado cargando
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:8px;"></i>Sincronizando...';
+
+    try {
+        const r = await fetch('/sync-drive', { method: 'POST' });
+        const data = await r.json();
+
+        if (data.ok) {
+            if (data.total === 0) {
+                showDocAlert('ℹ️ Sin registros nuevos — todos ya están en Drive', 'success');
+            } else {
+                const msg = data.errores && data.errores.length
+                    ? `✅ ${data.synced}/${data.total} subidos (${data.errores.length} con error)`
+                    : `✅ ${data.synced} registro(s) nuevos sincronizados con Drive`;
+                showDocAlert(msg, 'success');
+                if (data.errores && data.errores.length) console.warn('[sync-drive] Errores:', data.errores);
+            }
+        } else {
+            showDocAlert('❌ Error: ' + (data.error || 'Sin respuesta'), 'error');
+        }
+    } catch (e) {
+        showDocAlert('❌ Error de red al sincronizar', 'error');
+        console.error('[sync-drive]', e);
+    } finally {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.innerHTML = originalHTML;
+    }
+}
 

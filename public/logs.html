@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DentalBot — Logs de Conversaciones</title>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #F8FAFC;
+            --card: #FFFFFF;
+            --border: #E2E8F0;
+            --text: #0F172A;
+            --sub: #64748B;
+            --primary: #2563EB;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --font: 'DM Sans', sans-serif;
+            --font-display: 'Space Grotesk', sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        header {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 16px 28px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        header h1 { font-family: var(--font-display); font-size: 20px; font-weight: 700; }
+        header p { font-size: 13px; color: var(--sub); }
+        .header-back {
+            margin-left: auto;
+            padding: 9px 18px;
+            border-radius: 10px;
+            background: rgba(37,99,235,0.07);
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 13px;
+            text-decoration: none;
+            border: 1px solid rgba(37,99,235,0.15);
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 28px 20px; display: grid; grid-template-columns: 260px 1fr; gap: 20px; }
+
+        /* Sidebar días */
+        .sidebar { display: flex; flex-direction: column; gap: 8px; }
+        .sidebar-title { font-size: 11px; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+        .dia-btn {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: left;
+            color: var(--text);
+            transition: all 0.15s;
+        }
+        .dia-btn:hover { border-color: var(--primary); background: rgba(37,99,235,0.04); color: var(--primary); }
+        .dia-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        /* Panel principal */
+        .main { display: flex; flex-direction: column; gap: 16px; }
+
+        /* Tarjetas resumen */
+        .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        .stat-card {
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px 18px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .stat-icon { font-size: 22px; }
+        .stat-label { font-size: 11px; color: var(--sub); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+        .stat-value { font-size: 24px; font-weight: 700; font-family: var(--font-display); }
+
+        /* Tabla conversaciones */
+        .card { background: white; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+        .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+        .card-title { font-family: var(--font-display); font-size: 15px; font-weight: 700; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 700; color: var(--sub); text-transform: uppercase; letter-spacing: 0.06em; background: #F8FAFC; border-bottom: 1px solid var(--border); }
+        tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer; }
+        tbody tr:hover { background: rgba(37,99,235,0.03); }
+        tbody tr:last-child { border-bottom: none; }
+        td { padding: 11px 16px; font-size: 13px; }
+        .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+        .badge-ok { background: rgba(16,185,129,0.1); color: #059669; }
+        .badge-drop { background: rgba(239,68,68,0.1); color: #DC2626; }
+        .step-pill { font-size: 11px; padding: 3px 8px; border-radius: 6px; background: #F1F5F9; color: var(--sub); font-weight: 600; }
+
+        /* Modal chat */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(15,23,42,0.5); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+        .modal-overlay.open { display: flex; }
+        .modal { background: white; border-radius: 20px; width: 100%; max-width: 540px; max-height: 85vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
+        .modal-header { padding: 18px 22px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+        .modal-header h2 { font-family: var(--font-display); font-size: 16px; font-weight: 700; flex: 1; }
+        .modal-close { font-size: 20px; cursor: pointer; color: var(--sub); border: none; background: none; }
+        .chat-box { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; background: #F0F4F8; }
+        .bubble { max-width: 80%; padding: 10px 14px; border-radius: 14px; font-size: 13px; line-height: 1.5; }
+        .bubble-in { background: white; border: 1px solid var(--border); border-radius: 14px 14px 14px 2px; align-self: flex-start; }
+        .bubble-out { background: #DCF8C6; border-radius: 14px 14px 2px 14px; align-self: flex-end; }
+        .bubble-meta { font-size: 10px; color: var(--sub); margin-top: 3px; display: flex; align-items: center; gap: 6px; }
+        .step-tag { background: rgba(37,99,235,0.1); color: var(--primary); padding: 1px 6px; border-radius: 4px; font-weight: 600; }
+
+        /* Pasos donde se quedan */
+        .drops-card { background: white; border: 1px solid var(--border); border-radius: 16px; padding: 18px 20px; }
+        .drops-title { font-family: var(--font-display); font-size: 14px; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .drop-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+        .drop-row:last-child { border-bottom: none; }
+        .drop-step { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 8px; background: rgba(239,68,68,0.08); color: #DC2626; min-width: 140px; }
+        .drop-bar-wrap { flex: 1; height: 8px; background: #F1F5F9; border-radius: 4px; overflow: hidden; }
+        .drop-bar { height: 100%; background: var(--danger); border-radius: 4px; transition: width 0.5s; }
+        .drop-count { font-size: 13px; font-weight: 700; color: var(--text); min-width: 32px; text-align: right; }
+
+        .empty { text-align: center; padding: 40px; color: var(--sub); font-size: 14px; }
+        .loading { text-align: center; padding: 30px; color: var(--sub); }
+
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <i class="fa-solid fa-comments" style="font-size:24px;color:var(--primary)"></i>
+    <div>
+        <h1>Logs de Conversaciones</h1>
+        <p>Historial completo de chats con el bot</p>
+    </div>
+    <a href="/" class="header-back"><i class="fa-solid fa-arrow-left" style="margin-right:6px"></i>Volver al Panel</a>
+</header>
+
+<div class="container">
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-title"><i class="fa-regular fa-calendar" style="margin-right:6px"></i>Días disponibles</div>
+        <div id="diasList">
+            <div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <div id="statsRow" class="stats-row" style="display:none">
+            <div class="stat-card">
+                <i class="fa-solid fa-comments stat-icon" style="color:var(--primary)"></i>
+                <div>
+                    <div class="stat-label">Conversaciones</div>
+                    <div class="stat-value" id="statTotal">—</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-check-circle stat-icon" style="color:var(--success)"></i>
+                <div>
+                    <div class="stat-label">Completadas</div>
+                    <div class="stat-value" id="statOk">—</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-person-running stat-icon" style="color:var(--danger)"></i>
+                <div>
+                    <div class="stat-label">Abandonadas</div>
+                    <div class="stat-value" id="statDrop">—</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <i class="fa-solid fa-percent stat-icon" style="color:var(--warning)"></i>
+                <div>
+                    <div class="stat-label">Tasa éxito</div>
+                    <div class="stat-value" id="statRate">—</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="dropsSection" style="display:none" class="drops-card">
+            <div class="drops-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--warning)"></i> ¿Dónde abandonan los usuarios?</div>
+            <div id="dropsList"></div>
+        </div>
+
+        <div class="card" id="mainCard">
+            <div class="card-header">
+                <i class="fa-solid fa-list" style="color:var(--primary)"></i>
+                <span class="card-title">Conversaciones</span>
+                <span id="diaLabel" style="font-size:12px;color:var(--sub);margin-left:auto"></span>
+            </div>
+            <div id="tablaConvs">
+                <div class="empty"><i class="fa-regular fa-folder-open" style="font-size:28px;margin-bottom:10px;display:block"></i>Selecciona un día para ver las conversaciones</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal chat -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)cerrarModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <i class="fa-brands fa-whatsapp" style="color:#25D366;font-size:20px"></i>
+            <h2 id="modalTitle">Conversación</h2>
+            <button class="modal-close" onclick="cerrarModal()">✕</button>
+        </div>
+        <div class="chat-box" id="chatBox"></div>
+    </div>
+</div>
+
+<script>
+let diaActivo = null;
+
+// ── Cargar días disponibles ──────────────────────────
+async function cargarDias() {
+    const res = await fetch('/logs/dias');
+    const dias = await res.json();
+    const el = document.getElementById('diasList');
+
+    if (!dias.length) {
+        el.innerHTML = '<div style="font-size:13px;color:#94A3B8;padding:8px">Sin logs aún.<br>El bot empezará a registrar desde ahora.</div>';
+        return;
+    }
+
+    el.innerHTML = dias.map(d => `<button class="dia-btn" onclick="seleccionarDia('${d}')">${formatDia(d)}</button>`).join('');
+    // Seleccionar el más reciente automáticamente
+    seleccionarDia(dias[0]);
+}
+
+function formatDia(iso) {
+    const [y, m, d] = iso.split('-');
+    const meses = ['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return `${d} ${meses[+m]} ${y}`;
+}
+
+// ── Seleccionar día ──────────────────────────────────
+async function seleccionarDia(dia) {
+    diaActivo = dia;
+
+    // Resaltar botón activo
+    document.querySelectorAll('.dia-btn').forEach(b => b.classList.remove('active'));
+    const btns = document.querySelectorAll('.dia-btn');
+    btns.forEach(b => { if (b.textContent.trim() === formatDia(dia)) b.classList.add('active'); });
+
+    document.getElementById('diaLabel').textContent = formatDia(dia);
+    document.getElementById('tablaConvs').innerHTML = '<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+
+    // Cargar resumen y conversaciones en paralelo
+    const [resumen, convs] = await Promise.all([
+        fetch(`/logs/resumen/${dia}`).then(r => r.json()),
+        fetch(`/logs/conversaciones/${dia}`).then(r => r.json())
+    ]);
+
+    renderStats(resumen, convs);
+    renderDrops(resumen);
+    renderTabla(convs);
+}
+
+// ── Stats ────────────────────────────────────────────
+function renderStats(resumen, convs) {
+    const total = convs.length;
+    const ok = convs.filter(c => c.completado).length;
+    const drop = total - ok;
+    const rate = total > 0 ? Math.round((ok / total) * 100) : 0;
+
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statOk').textContent = ok;
+    document.getElementById('statDrop').textContent = drop;
+    document.getElementById('statRate').textContent = rate + '%';
+    document.getElementById('statsRow').style.display = 'grid';
+}
+
+// ── Dónde abandonan ──────────────────────────────────
+function renderDrops(resumen) {
+    const abandonadas = resumen.abandonadas_en || {};
+    const entradas = Object.entries(abandonadas).sort((a, b) => b[1] - a[1]);
+
+    if (!entradas.length) {
+        document.getElementById('dropsSection').style.display = 'none';
+        return;
+    }
+
+    const maxVal = Math.max(...entradas.map(e => e[1]));
+    const stepLabels = {
+        pedir_nombre: 'Dar nombre',
+        pedir_edad: 'Dar edad',
+        pedir_dni: 'Dar DNI',
+        elegir_doctor: 'Elegir doctor',
+        elegir_fecha: 'Elegir fecha',
+        cita_hora: 'Elegir hora',
+        pedir_telefono: 'Dar teléfono',
+        sin_citas: 'Sin citas disponibles',
+        inicio: 'Inicio (sin respuesta)',
+        desconocido: 'Desconocido'
+    };
+
+    document.getElementById('dropsList').innerHTML = entradas.map(([step, count]) => `
+        <div class="drop-row">
+            <div class="drop-step">${stepLabels[step] || step}</div>
+            <div class="drop-bar-wrap"><div class="drop-bar" style="width:${Math.round((count/maxVal)*100)}%"></div></div>
+            <div class="drop-count">${count}</div>
+        </div>
+    `).join('');
+
+    document.getElementById('dropsSection').style.display = 'block';
+}
+
+// ── Tabla conversaciones ─────────────────────────────
+function renderTabla(convs) {
+    if (!convs.length) {
+        document.getElementById('tablaConvs').innerHTML = '<div class="empty">No hay conversaciones en este día.</div>';
+        return;
+    }
+
+    const stepLabels = {
+        pedir_nombre: 'Dar nombre', pedir_edad: 'Dar edad', pedir_dni: 'Dar DNI',
+        elegir_doctor: 'Elegir doctor', elegir_fecha: 'Elegir fecha',
+        cita_hora: 'Elegir hora', pedir_telefono: 'Dar teléfono',
+        completado: 'Completado ✅', sin_citas: 'Sin citas', inicio: 'Sin respuesta'
+    };
+
+    document.getElementById('tablaConvs').innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Teléfono</th>
+                    <th>Inicio</th>
+                    <th>Último msj</th>
+                    <th>Mensajes</th>
+                    <th>Paró en</th>
+                    <th>Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${convs.map(c => `
+                    <tr onclick="verChat('${c.phone}')">
+                        <td><i class="fa-brands fa-whatsapp" style="color:#25D366;margin-right:6px"></i>${maskPhone(c.phone)}</td>
+                        <td>${c.primer_mensaje}</td>
+                        <td>${c.ultimo_mensaje}</td>
+                        <td style="text-align:center">${c.total_mensajes}</td>
+                        <td><span class="step-pill">${stepLabels[c.step_final] || c.step_final}</span></td>
+                        <td>
+                            ${c.completado
+                                ? '<span class="badge badge-ok"><i class="fa-solid fa-check"></i> Cita agendada</span>'
+                                : '<span class="badge badge-drop"><i class="fa-solid fa-xmark"></i> Abandonó</span>'
+                            }
+                        </td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+}
+
+function maskPhone(phone) {
+    // Mostrar solo últimos 4 dígitos por privacidad
+    return '•••• ' + phone.slice(-4);
+}
+
+// ── Ver chat individual ──────────────────────────────
+async function verChat(phone) {
+    if (!diaActivo) return;
+    document.getElementById('modalTitle').textContent = 'Chat — •••• ' + phone.slice(-4);
+    document.getElementById('chatBox').innerHTML = '<div class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</div>';
+    document.getElementById('modalOverlay').classList.add('open');
+
+    const res = await fetch(`/logs/chat/${diaActivo}/${phone}`);
+    const historial = await res.json();
+
+    const stepLabels = {
+        pedir_nombre: 'nombre', pedir_edad: 'edad', pedir_dni: 'DNI',
+        elegir_doctor: 'doctor', elegir_fecha: 'fecha',
+        cita_hora: 'hora', pedir_telefono: 'celular',
+        completado: '✅ completado', sin_citas: '⛔ sin citas', inicio: 'inicio'
+    };
+
+    document.getElementById('chatBox').innerHTML = historial.map(m => `
+        <div class="bubble ${m.dir === 'IN' ? 'bubble-in' : 'bubble-out'}">
+            <div>${escapeHtml(m.msg)}</div>
+            <div class="bubble-meta">
+                ${m.hora}
+                ${m.step ? `<span class="step-tag">${stepLabels[m.step] || m.step}</span>` : ''}
+            </div>
+        </div>
+    `).join('');
+
+    // Scroll al final
+    const box = document.getElementById('chatBox');
+    box.scrollTop = box.scrollHeight;
+}
+
+function cerrarModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+}
+
+function escapeHtml(text) {
+    return String(text || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\n/g, '<br>');
+}
+
+cargarDias();
+</script>
+</body>
+</html>
+

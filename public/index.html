@@ -1,15 +1,19 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DentalBot — Panel Unificado</title>
     <script src="/socket.io/socket.io.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
     <div class="bg-orb orb-1"></div>
@@ -18,15 +22,20 @@
 
     <!-- Header Doctores (verde, visible por defecto) -->
     <header id="headerDoctores" class="doc-header">
+        
         <div style="font-size:28px">🦷</div>
         <div style="flex:1">
-            <h1 style="font-size:20px;font-weight:700;">Panel de Gestión — Odontología</h1>
+            <h1 style="font-size:20px;font-weight:700;font-family:var(--font-display);">Panel de Gestión — Odontología
+            </h1>
             <p style="font-size:12px;opacity:0.8;">Configura los días y horarios de cada doctor</p>
         </div>
-        <div id="docWaStatus" class="doc-wa-pill" onclick="document.getElementById('qrModal').style.display='flex'">  
+        <div id="docWaStatus" class="doc-wa-pill" onclick="document.getElementById('qrModal').style.display='flex'">
             <i class="fa-brands fa-whatsapp"></i> <span id="docWaText">Iniciando...</span>
         </div>
-        <a href="#" onclick="switchTab('recordatorios');return false;" class="doc-nav-btn">📨 Panel Recordatorios</a>
+        <a href="#" onclick="switchTab('recordatorios');return false;" class="doc-nav-btn"><i
+                class="fa-regular fa-envelope"></i> Panel Recordatorios</a>
+        <a href="/logs" target="_blank" class="doc-nav-btn" style="background:rgba(37,99,235,0.08);color:#2563EB;border:1px solid rgba(37,99,235,0.2);"><i
+                class="fa-solid fa-comments"></i> Ver Logs</a>
     </header>
 
     <!-- Header Recordatorios (azul, oculto por defecto) -->
@@ -39,12 +48,13 @@
                     <p class="brand-sub">Panel de Recordatorios</p>
                 </div>
             </div>
-            <div style="display:flex;align-items:center;gap:12px;">
+            <div style="display:flex;align-items:center;gap:14px;">
                 <div id="connectionStatus" class="status-pill status-loading">
                     <span class="status-dot"></span>
                     <span class="status-text">Conectando...</span>
                 </div>
-                <a href="#" onclick="switchTab('doctores');return false;" class="rec-nav-btn">🦷 Panel Doctores</a>
+                <a href="#" onclick="switchTab('doctores');return false;" class="rec-nav-btn"><i
+                        class="fa-solid fa-user-md"></i> Panel Doctores</a>
             </div>
         </div>
     </header>
@@ -54,13 +64,28 @@
     <!-- ══════════════════════════════════════════════ -->
     <div id="qrModal" class="qr-modal" style="display:none;">
         <div class="qr-modal-content">
-            <button class="qr-modal-close" onclick="document.getElementById('qrModal').style.display='none'">&times;</button>
-            <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;"><i class="fa-brands fa-whatsapp" style="color:#6EAD8C;margin-right:8px;"></i>Estado WhatsApp</h2>
-            <p style="font-size:12px;color:#94A3B8;margin-bottom:16px;">Sesión compartida para todo el sistema</p>
+            <button class="qr-modal-close"
+                onclick="document.getElementById('qrModal').style.display='none'">&times;</button>
+            <h2 style="font-size:20px;font-weight:700;margin-bottom:6px;font-family:var(--font-display);"><i
+                    class="fa-brands fa-whatsapp" style="color:#0D9488;margin-right:10px;"></i>Estado WhatsApp</h2>
+            <p style="font-size:13px;color:#64748B;margin-bottom:20px;">Sesión compartida para todo el sistema</p>
             <div id="loadingStatus" class="status-section">
                 <div class="spinner-ring"></div>
                 <p class="status-msg">Iniciando WhatsApp...</p>
                 <p class="status-hint">Esto puede tomar unos segundos</p>
+            </div>
+            <!-- Estado: Cerrando sesión -->
+            <div id="logoutStatus" class="status-section hidden">
+                <div class="logout-anim">
+                    <div class="logout-icon-wrap">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                    </div>
+                    <div class="logout-progress-bar">
+                        <div class="logout-progress-fill"></div>
+                    </div>
+                </div>
+                <p class="status-msg" style="color:#DC2626;font-weight:600;">Cerrando sesión de WhatsApp...</p>
+                <p class="status-hint">Se mostrará el QR en unos segundos</p>
             </div>
             <div id="qrContainer" class="status-section hidden">
                 <div class="qr-label"><i class="fa-solid fa-qrcode"></i> Escanea con WhatsApp</div>
@@ -70,12 +95,39 @@
             <div id="botInfo" class="hidden">
                 <div class="connected-badge">
                     <div class="connected-icon"><i class="fa-brands fa-whatsapp"></i></div>
-                    <div><h3 class="connected-title">Sesión Activa</h3><p class="connected-sub">WhatsApp vinculado correctamente</p></div>
+                    <div>
+                        <h3 class="connected-title">Sesión Activa</h3>
+                        <p class="connected-sub">WhatsApp vinculado correctamente</p>
+                    </div>
                     <div class="pulse-dot"></div>
                 </div>
                 <div class="btn-group">
-                    <button id="logoutBtn" class="btn btn-danger"><i class="fa-solid fa-right-from-bracket"></i> Cerrar Sesión</button>
-                    <button id="refreshBtn" class="btn btn-ghost" style="color:#94A3B8;border-color:rgba(148,163,184,0.15);"><i class="fa-solid fa-rotate-right"></i> Refrescar Sesión</button>
+                    <button id="logoutBtn" class="btn btn-danger"><i class="fa-solid fa-right-from-bracket"></i> Cerrar
+                        Sesión</button>
+                    <button id="refreshBtn" class="btn btn-ghost" style="color:#64748B;border-color:#E2E8F0;"><i
+                            class="fa-solid fa-rotate-right"></i> Refrescar Sesión</button>
+                </div>
+            </div>
+            <!-- Confirmación de cierre de sesión integrada -->
+            <div id="logoutConfirm" class="hidden">
+                <div style="text-align:center;padding:10px 0;">
+                    <div
+                        style="width:64px;height:64px;border-radius:16px;background:rgba(220,38,38,0.08);display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+                        <i class="fa-solid fa-right-from-bracket" style="font-size:24px;color:#DC2626;"></i>
+                    </div>
+                    <h3
+                        style="font-size:18px;font-weight:700;color:#0F172A;font-family:var(--font-display);margin-bottom:8px;">
+                        ¿Cerrar sesión de WhatsApp?</h3>
+                    <p style="font-size:13px;color:#64748B;line-height:1.6;margin-bottom:24px;">El bot dejará de
+                        funcionar hasta que escanees un nuevo código QR.</p>
+                    <div style="display:flex;gap:10px;">
+                        <button id="logoutCancelBtn" class="btn btn-ghost"
+                            style="flex:1;justify-content:center;padding:11px 16px;"><i class="fa-solid fa-xmark"
+                                style="margin-right:6px;"></i>Cancelar</button>
+                        <button id="logoutConfirmBtn" class="btn btn-danger"
+                            style="flex:1;justify-content:center;padding:11px 16px;background:#DC2626;color:white;border:none;"><i
+                                class="fa-solid fa-right-from-bracket" style="margin-right:6px;"></i>Sí, cerrar</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -84,14 +136,22 @@
     <!-- ══════════════════════════════════════════════ -->
     <!-- MODAL DE CONFIRMACIÓN CUSTOM                   -->
     <!-- ══════════════════════════════════════════════ -->
-    <div id="confirmModal" class="qr-modal" style="display:none; z-index:9999; backdrop-filter: blur(8px); background: rgba(11,15,25,0.7);">
-        <div class="qr-modal-content" style="max-width: 360px; text-align: center; border: 1px solid rgba(212,99,122,0.15); box-shadow: 0 20px 40px -10px rgba(212,99,122,0.1), inset 0 1px 0 rgba(255,255,255,0.05); padding: 32px 24px;">
-            <div style="font-size: 42px; color: #C97A8A; margin-bottom: 16px; filter: drop-shadow(0 4px 12px rgba(212,99,122,0.3));"><i class="fa-solid fa-triangle-exclamation"></i></div>
-            <h2 id="confirmModalTitle" style="font-size:18px;font-weight:700;margin-bottom:8px; color: #F8FAFC; letter-spacing: -0.01em;">¿Estás seguro?</h2>
-            <p id="confirmModalText" style="font-size:13px;color:#94A3B8;margin-bottom:28px; line-height: 1.6;"></p>
+    <div id="confirmModal" class="qr-modal"
+        style="display:none; z-index:9999; backdrop-filter: blur(8px); background: rgba(15,23,42,0.4);">
+        <div class="qr-modal-content"
+            style="max-width: 380px; text-align: center; border: 1px solid rgba(220,38,38,0.12); box-shadow: 0 20px 40px -10px rgba(0,0,0,0.08); padding: 36px 28px;">
+            <div style="font-size: 48px; color: #DC2626; margin-bottom: 18px;"><i
+                    class="fa-solid fa-triangle-exclamation"></i></div>
+            <h2 id="confirmModalTitle"
+                style="font-size:20px;font-weight:700;margin-bottom:10px; color: #0F172A; letter-spacing: -0.01em; font-family:var(--font-display);">
+                ¿Estás seguro?</h2>
+            <p id="confirmModalText" style="font-size:14px;color:#64748B;margin-bottom:30px; line-height: 1.6;"></p>
             <div style="display: flex; gap: 12px; justify-content: center;">
-                <button id="confirmBtnNo" class="doc-btn" style="flex:1; background:rgba(148,163,184,0.08); color:#94A3B8; border: 1px solid rgba(148,163,184,0.15);">Cancelar</button>
-                <button id="confirmBtnYes" class="doc-btn doc-btn-danger" style="flex:1; display:flex; justify-content:center; align-items:center; box-shadow: 0 4px 12px rgba(212,99,122,0.2);"><i class="fa-solid fa-eraser" style="margin-right:6px"></i> Sí, limpiar</button>
+                <button id="confirmBtnNo" class="doc-btn"
+                    style="flex:1; background:#F1F5F9; color:#64748B; border: 1px solid #E2E8F0;">Cancelar</button>
+                <button id="confirmBtnYes" class="doc-btn doc-btn-danger"
+                    style="flex:1; display:flex; justify-content:center; align-items:center;"><i
+                        class="fa-solid fa-eraser" style="margin-right:8px"></i> Sí, limpiar</button>
             </div>
         </div>
     </div>
@@ -103,20 +163,32 @@
 
         <div class="stats-bar">
             <div class="stat-card">
-                <i class="fa-solid fa-clock stat-icon" style="color: #5BA4B5;"></i>
-                <div><p class="stat-label">Próximo Envío</p><p class="stat-value" id="nextSendDisplay">09:00 AM</p></div>
+                <i class="fa-solid fa-clock stat-icon" style="color:#2563EB;"></i>
+                <div>
+                    <p class="stat-label">Próximo Envío</p>
+                    <p class="stat-value" id="nextSendDisplay">09:00 AM</p>
+                </div>
             </div>
             <div class="stat-card">
-                <i class="fa-brands fa-whatsapp stat-icon" style="color: #6EAD8C;"></i>
-                <div><p class="stat-label">WhatsApp</p><p class="stat-value" id="waStatusDisplay">Iniciando</p></div>
+                <i class="fa-brands fa-whatsapp stat-icon" style="color:#0D9488;"></i>
+                <div>
+                    <p class="stat-label">WhatsApp</p>
+                    <p class="stat-value" id="waStatusDisplay">Iniciando</p>
+                </div>
             </div>
             <div class="stat-card">
-                <i class="fa-solid fa-user-check stat-icon" style="color: #9B8CBF;"></i>
-                <div><p class="stat-label">Pacientes Mañana</p><p class="stat-value" id="patientCountDisplay">—</p></div>
+                <i class="fa-solid fa-user-check stat-icon" style="color:#8B5CF6;"></i>
+                <div>
+                    <p class="stat-label">Pacientes Mañana</p>
+                    <p class="stat-value" id="patientCountDisplay">—</p>
+                </div>
             </div>
             <div class="stat-card">
-                <i class="fa-solid fa-calendar-check stat-icon" style="color: #5BA4B5;"></i>
-                <div><p class="stat-label">Auto-Envío</p><p class="stat-value" id="autoStatusDisplay">Activo</p></div>
+                <i class="fa-solid fa-paper-plane stat-icon" style="color:#F59E0B;"></i>
+                <div>
+                    <p class="stat-label">Auto-Envío</p>
+                    <p class="stat-value" id="autoStatusDisplay">Activo</p>
+                </div>
             </div>
         </div>
 
@@ -125,7 +197,7 @@
                 <!-- Config -->
                 <div class="card">
                     <div class="card-header">
-                        <i class="fa-solid fa-sliders" style="color: #5BA4B5;"></i>
+                        <i class="fa-solid fa-sliders" style="color: #4A9D8C;"></i>
                         <h2 class="card-title">Configuración</h2>
                     </div>
                     <div class="control-row">
@@ -133,30 +205,60 @@
                             <h3 class="control-label">Envíos Automáticos</h3>
                             <p class="control-sub" id="cronTimeDisplay">Diario a las 09:00 AM</p>
                         </div>
-                        <label class="switch"><input type="checkbox" id="autoToggle" checked><span class="slider round"></span></label>
+                        <label class="switch"><input type="checkbox" id="autoToggle" checked><span
+                                class="slider round"></span></label>
                     </div>
                     <div class="time-picker-card">
                         <div class="time-picker-header">
-                            <i class="fa-regular fa-clock" style="color: #26A69A;"></i>
+                            <i class="fa-regular fa-clock" style="color: #4A9D8C;"></i>
                             <h3 class="control-label">Hora de Envío</h3>
-                            <span class="badge-12h">12H</span>
+                            <span class="badge-12h"
+                                style="background:linear-gradient(135deg, #2563EB, #1D4ED8);">12H</span>
                         </div>
                         <div class="time-picker-inputs">
                             <select id="hourInput" class="time-select">
-                                <option value="01">01</option><option value="02">02</option><option value="03">03</option>
-                                <option value="04">04</option><option value="05">05</option><option value="06">06</option>
-                                <option value="07">07</option><option value="08">08</option><option value="09" selected>09</option>
-                                <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+                                <option value="01">01</option>
+                                <option value="02">02</option>
+                                <option value="03">03</option>
+                                <option value="04">04</option>
+                                <option value="05">05</option>
+                                <option value="06">06</option>
+                                <option value="07">07</option>
+                                <option value="08">08</option>
+                                <option value="09" selected>09</option>
+                                <option value="10">10</option>
+                                <option value="11">11</option>
+                                <option value="12">12</option>
                             </select>
                             <span class="time-colon">:</span>
                             <select id="minuteInput" class="time-select">
-                                <option value="00">00</option><option value="05">05</option><option value="10">10</option>
-                                <option value="15">15</option><option value="20">20</option><option value="25">25</option>
-                                <option value="30">30</option><option value="35">35</option><option value="40">40</option>
-                                <option value="45">45</option><option value="50">50</option><option value="55">55</option>
+                                <option value="00">00</option>
+                                <option value="05">05</option>
+                                <option value="10">10</option>
+                                <option value="15">15</option>
+                                <option value="20">20</option>
+                                <option value="25">25</option>
+                                <option value="30">30</option>
+                                <option value="35">35</option>
+                                <option value="40">40</option>
+                                <option value="45">45</option>
+                                <option value="50">50</option>
+                                <option value="55">55</option>
                             </select>
-                            <select id="periodInput" class="period-select"><option value="AM">AM</option><option value="PM">PM</option></select>
+                            <select id="periodInput" class="period-select">
+                                <option value="AM">AM</option>
+                                <option value="PM">PM</option>
+                            </select>
                         </div>
+                    </div>
+                    <div class="control-row" style="margin-top:8px; border-top:1px solid #E2E8F0; padding-top:16px;">
+                        <div class="control-info">
+                            <h3 class="control-label">Bot de Citas</h3>
+                            <p class="control-sub" id="botStatusRecDisplay">Cargando...</p>
+                        </div>
+                        <button id="botToggleRec" class="btn btn-sm" onclick="toggleBotFromRec()" style="padding:8px 18px; font-size:13px; border-radius:8px; font-weight:600; transition:all 0.3s ease;">
+                            <i class="fa-solid fa-volume-xmark" style="margin-right:6px;"></i><span id="botToggleRecText">Cargando...</span>
+                        </button>
                     </div>
                     <button id="manualCheckBtn" class="btn btn-primary btn-full">
                         <i class="fa-solid fa-paper-plane"></i> Enviar Recordatorios Ahora
@@ -167,9 +269,10 @@
             <div class="right-col">
                 <div class="card card-full h-full">
                     <div class="card-header">
-                        <i class="fa-solid fa-terminal" style="color: #90A4AE;"></i>
+                        <i class="fa-solid fa-terminal" style="color: #4A9D8C;"></i>
                         <h2 class="card-title">Registro de Actividad</h2>
-                        <button id="clearLogsBtn" class="btn-clear"><i class="fa-solid fa-trash-can"></i> Limpiar</button>
+                        <button id="clearLogsBtn" class="btn-clear"><i class="fa-solid fa-trash-can"></i>
+                            Limpiar</button>
                     </div>
                     <div id="logsContainer" class="logs-container">
                         <div class="log-entry log-system">
@@ -184,15 +287,27 @@
 
         <div class="card mt-6">
             <div class="card-header">
-                <i class="fa-solid fa-tooth" style="color: #5BA4B5;"></i>
+                <i class="fa-solid fa-tooth" style="color: #4A9D8C;"></i>
                 <h2 class="card-title">Citas para Mañana</h2>
-                <button id="refreshPacientesBtn" class="btn btn-ghost btn-sm"><i class="fa-solid fa-rotate-right"></i> Actualizar</button>
+                <button id="refreshPacientesBtn" class="btn btn-ghost btn-sm"><i class="fa-solid fa-rotate-right"></i>
+                    Actualizar</button>
             </div>
             <div class="table-wrapper">
                 <table class="data-table">
-                    <thead><tr><th>Paciente</th><th>WhatsApp</th><th>Tratamiento</th><th>Fecha</th><th class="text-right">Acción</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th>Paciente</th>
+                            <th>WhatsApp</th>
+                            <th>Tratamiento</th>
+                            <th>Fecha</th>
+                            <th class="text-right">Acción</th>
+                        </tr>
+                    </thead>
                     <tbody id="pacientesTableBody">
-                        <tr class="placeholder-row"><td colspan="5" class="empty-cell"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>
+                        <tr class="placeholder-row">
+                            <td colspan="5" class="empty-cell"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -203,145 +318,197 @@
     <!-- TAB 2: GESTIÓN DOCTORES (tema verde original) -->
     <!-- ══════════════════════════════════════════════ -->
     <main id="tab-doctores" class="tab-content active" style="display:block;">
-      <div class="doc-panel" style="padding-top:20px;">
+        <div class="doc-panel" style="padding-top:20px;">
 
-        <!-- Bot Toggle -->
-        <div class="doc-card doc-full" style="background:rgba(91,164,181,0.06); border-color:rgba(91,164,181,0.2);">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                <div>
-                    <h3 style="font-size:18px; color:#F1F5F9;">🤖 Estado de Atención: <span id="botEstadoTexto">Cargando...</span></h3>
-                    <p style="font-size:13px; color:#94A3B8; margin-top:4px;">Si lo desactivas, el bot dirá que <b>no hay citas disponibles</b> y pedirá que intenten el viernes.</p>
-                </div>
-                <button id="btnActivarBot" class="doc-btn doc-btn-primary" onclick="toggleBot()" style="padding:12px 24px; font-size:14px;">⏳ Cargando...</button>
-            </div>
-        </div>
-
-        <!-- Modo Viernes -->
-        <div class="doc-card doc-full" style="background:rgba(201,168,78,0.06); border-color:rgba(201,168,78,0.2);">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
-                <div>
-                    <h3 style="font-size:16px; color:#C9A84E;">📅 Modo Viernes: <span id="viernesEstadoTexto">Cargando...</span></h3>
-                    <p style="font-size:12px; color:#94A3B8; margin-top:4px;">
-                        Actívalo cuando el bot esté <b style="color:#C9A84E;">desactivado y sea viernes</b>. El bot avisará que las citas abren <b style="color:#C9A84E;">hoy a las 7:30 a.m.</b>
-                    </p>
-                </div>
-                <button id="btnModoViernes" class="doc-btn" onclick="toggleModoViernes()" style="padding:10px 20px; font-size:13px; background:rgba(201,168,78,0.15); color:#C9A84E; border:1px solid rgba(201,168,78,0.3);">⏳ Cargando...</button>
-            </div>
-        </div>
-
-        <!-- Doctor Tabs -->
-        <div class="doc-tabs-bar">
-            <button class="doc-tab active" onclick="cambiarDoctor(0)">👨‍⚕️👶 C.D. Manuel Romani</button>
-            <button class="doc-tab" onclick="cambiarDoctor(1)">👨‍⚕️ C.D. Elio Támara</button>
-            <button class="doc-tab" onclick="cambiarDoctor(2)">👶 C.D. Jimy Osorio</button>
-            <button class="doc-tab" onclick="cambiarDoctor(3)">👨‍⚕️👶 C.D. Fernando Bustamante</button>
-        </div>
-
-        <div id="docAlert" class="doc-alert" style="display:none;"></div>
-
-        <div class="doc-grid">
-            <!-- Días de Trabajo -->
-            <div class="doc-card">
-                <h3>📆 Días que trabaja</h3>
-                <p class="doc-sub">Selecciona los días activos del doctor (verde = trabaja, rojo = no trabaja)</p>
-                <div id="diasGrid" class="dia-grid"></div>
-                <button class="doc-btn doc-btn-primary" onclick="guardarDias()">💾 Guardar días</button>
-            </div>
-
-            <!-- Agregar Horario -->
-            <div class="doc-card">
-                <h3>⏰ Agregar Horarios</h3>
-                <p class="doc-sub">Selecciona la fecha, el turno y haz clic en las horas que deseas agregar</p>
-                <div class="doc-form-row">
-                    <div class="doc-form-group">
-                        <label>Fecha</label>
-                        <input type="date" id="inputFecha">
-                    </div>
-                    <div class="doc-form-group">
-                        <label>Turno</label>
-                        <select id="inputTurno" onchange="filtrarHoras()">
-                            <option value="manana">🌅 Mañana</option>
-                            <option value="tarde">🌇 Tarde</option>
-                            <option value="todos">🕐 Todos</option>
-                        </select>
-                    </div>
-                </div>
-                <label>Horas <span style="font-weight:400;text-transform:none;letter-spacing:0">(clic para seleccionar)</span></label>
-                <div id="horasGrid" class="horas-grid"></div>
-                <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
-                    <button class="doc-btn doc-btn-primary" onclick="agregarHorario()">➕ Agregar Seleccionados</button>
-                    <button class="doc-btn" onclick="seleccionarTodasHoras()" style="background:rgba(91,164,181,0.1);color:#8EC5D0;font-size:12px;">✅ Todas</button>
-                    <button class="doc-btn" onclick="deseleccionarTodasHoras()" style="background:rgba(212,99,122,0.1);color:#C97A8A;font-size:12px;border:1px solid rgba(212,99,122,0.2);">❌ Ninguna</button>
-                </div>
-            </div>
-
-            <!-- Exportar Excel -->
-            <div class="doc-card doc-full">
-                <h3>📊 Exportar Datos a Excel</h3>
-                <p class="doc-sub">Descarga todos los datos de citas del sistema en formato Excel (.xlsx)</p>
-                <div class="doc-export-bar">
+            <!-- Bot Toggle -->
+            <div class="doc-card doc-full"
+                style="background:linear-gradient(135deg, rgba(37,99,235,0.04), rgba(37,99,235,0.02)); border-color:rgba(37,99,235,0.12);">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
                     <div>
-                        <h4 style="font-size:14px;font-weight:700;color:#8EC5D0;margin-bottom:2px;">Filtros de exportación</h4>
-                        <p style="font-size:12px;color:#94A3B8;">Puedes exportar todos los datos o filtrar por doctor, fecha o estado</p>
+                        <h3 style="font-size:18px; color:#0F172A; font-family:var(--font-display);"><i
+                                class="fa-solid fa-robot" style="color:#2563EB; margin-right:10px;"></i>Estado de
+                            Atención: <span id="botEstadoTexto">Cargando...</span></h3>
+                        <p style="font-size:13px; color:#64748B; margin-top:6px;">Si lo desactivas, el bot dirá que <b
+                                style="color:#2563EB;">no hay citas disponibles</b> y invitará a llamar por teléfono.
+                        </p>
                     </div>
-                    <div id="statsExport" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+                    <button id="btnActivarBot" class="doc-btn doc-btn-primary" onclick="toggleBot()"
+                        style="padding:14px 28px; font-size:14px;"><i class="fa-solid fa-power-off"
+                            style="margin-right:8px;"></i><span id="botBtnText">Cargando...</span></button>
                 </div>
-                <div class="doc-filter-row">
-                    <div class="doc-form-group">
-                        <label>Doctor</label>
-                        <select id="filtroDoctor">
-                            <option value="">Todos los doctores</option>
-                            <option>C.D. Manuel Jesús Romani Maldonado</option>
-                            <option>C.D. Elio Elvis Támara Trinidad</option>
-                            <option>C.D. Jimy Aldo Osorio Rosales</option>
-                            <option>C.D. Fernando Fredy Bustamante Tolentino</option>
-                        </select>
-                    </div>
-                    <div class="doc-form-group">
-                        <label>Desde</label>
-                        <input type="date" id="filtroDesde">
-                    </div>
-                    <div class="doc-form-group">
-                        <label>Hasta</label>
-                        <input type="date" id="filtroHasta">
-                    </div>
-                    <div class="doc-form-group">
-                        <label>Estado</label>
-                        <select id="filtroEstado"><option value="confirmada">Confirmada</option></select>
-                    </div>
-                    <div class="doc-form-group" style="display:flex;align-items:flex-end;gap:8px;">
-                        <button class="doc-btn doc-btn-excel" onclick="exportarExcel()">📥 Exportar Excel</button>
-                        <button class="doc-btn doc-btn-primary" onclick="cargarPreviewCitas()" style="background:rgba(91,164,181,0.1);color:#8EC5D0;">🔍 Preview</button>
-                    </div>
-                </div>
-                <div id="previewCitas"></div>
             </div>
 
-            <!-- Horarios Registrados -->
-            <div class="doc-card doc-full">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px;">
+            <!-- Modo Viernes -->
+            <div class="doc-card doc-full"
+                style="background:linear-gradient(135deg, rgba(217,119,6,0.04), rgba(217,119,6,0.02)); border-color:rgba(217,119,6,0.15);">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
                     <div>
-                        <h3>📋 Horarios Registrados — <span id="subtitleDoctor" style="color:#5BA4B5"></span></h3>
-                        <p class="doc-sub">Cada hora muestra si está libre o quién tiene la cita asignada</p>
+                        <h3 style="font-size:16px; color:#D97706; font-family:var(--font-display);"><i
+                                class="fa-regular fa-calendar-check" style="margin-right:10px;"></i>Modo Viernes: <span
+                                id="viernesEstadoTexto">Cargando...</span></h3>
+                        <p style="font-size:13px; color:#64748B; margin-top:6px;">
+                            Actívalo cuando el bot esté <b style="color:#D97706;">desactivado y sea viernes</b>. El bot
+                            avisará que las citas abren <b style="color:#D97706;">hoy a las 7:30 a.m.</b>
+                        </p>
                     </div>
-                    <button class="doc-btn" onclick="limpiarPanelActual()" style="background:linear-gradient(135deg, rgba(212,99,122,0.12), rgba(212,99,122,0.05)); color:#C97A8A; border:1px solid rgba(212,99,122,0.25); font-size:13px; font-weight:600; padding:8px 16px; border-radius:12px; transition:all 0.3s ease; box-shadow:0 4px 12px rgba(212,99,122,0.05);" onmouseover="this.style.background='rgba(212,99,122,0.15)'; this.style.transform='translateY(-1px)';" onmouseout="this.style.background='linear-gradient(135deg, rgba(212,99,122,0.12), rgba(212,99,122,0.05))'; this.style.transform='none';">
-                        <i class="fa-solid fa-eraser" style="margin-right:6px; opacity:0.8;"></i>Limpiar Panel
-                    </button>
-                </div>
-                <div id="listaHorarios">
-                    <div class="doc-empty">No hay horarios registrados</div>
+                    <button id="btnModoViernes" class="doc-btn" onclick="toggleModoViernes()"
+                        style="padding:12px 24px; font-size:13px; background:rgba(217,119,6,0.08); color:#D97706; border:1px solid rgba(217,119,6,0.2);"><i
+                            class="fa-regular fa-clock" style="margin-right:8px;"></i><span
+                            id="viernesBtnText">Cargando...</span></button>
                 </div>
             </div>
-        </div>
 
-      </div>
+            <!-- Doctor Tabs -->
+            <div class="doc-tabs-bar">
+                <button class="doc-tab active" onclick="cambiarDoctor(0)"><i class="fa-solid fa-user-md"></i> C.D.
+                    Manuel Romani</button>
+                <button class="doc-tab" onclick="cambiarDoctor(1)"><i class="fa-solid fa-user-md"></i> C.D. Elio
+                    Támara</button>
+                <button class="doc-tab" onclick="cambiarDoctor(2)"><i class="fa-solid fa-baby"></i> C.D. Jimy
+                    Osorio</button>
+                <button class="doc-tab" onclick="cambiarDoctor(3)"><i class="fa-solid fa-user-md"></i> C.D. Fernando
+                    Bustamante</button>
+                <button class="doc-tab" onclick="cambiarDoctor(4)"><i class="fa-solid fa-baby"></i> C.D. Yolanda
+                    Aliaga</button>
+            </div>
+
+            <div id="docAlert" class="doc-alert" style="display:none;"></div>
+
+            <div class="doc-grid">
+                <!-- Días de Trabajo -->
+                <div class="doc-card">
+                    <h3><i class="fa-regular fa-calendar-days" style="color:#2563EB; margin-right:10px;"></i>Días que
+                        trabaja</h3>
+                    <p class="doc-sub">Selecciona los días activos del doctor (verde = trabaja, rojo = no trabaja)</p>
+                    <div id="diasGrid" class="dia-grid"></div>
+                    <button class="doc-btn doc-btn-primary" onclick="guardarDias()"><i class="fa-solid fa-save"
+                            style="margin-right:8px;"></i>Guardar días</button>
+                </div>
+
+                <!-- Agregar Horario -->
+                <div class="doc-card">
+                    <h3><i class="fa-regular fa-clock" style="color:#2563EB; margin-right:10px;"></i>Agregar Horarios
+                    </h3>
+                    <p class="doc-sub">Selecciona la fecha, el turno y haz clic en las horas que deseas agregar</p>
+                    <div class="doc-form-row">
+                        <div class="doc-form-group">
+                            <label>Fecha</label>
+                            <input type="date" id="inputFecha">
+                        </div>
+                        <div class="doc-form-group">
+                            <label>Turno</label>
+                            <select id="inputTurno" onchange="filtrarHoras()">
+                                <option value="manana">🌅 Mañana</option>
+                                <option value="tarde">🌇 Tarde</option>
+                                <option value="todos">🕐 Todos</option>
+                            </select>
+                        </div>
+                    </div>
+                    <label>Horas <span style="font-weight:400;text-transform:none;letter-spacing:0">(clic para
+                            seleccionar)</span></label>
+                    <div id="horasGrid" class="horas-grid"></div>
+                    <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
+                        <button class="doc-btn doc-btn-primary" onclick="agregarHorario()"><i class="fa-solid fa-plus"
+                                style="margin-right:8px;"></i>Agregar Seleccionados</button>
+                        <button class="doc-btn" onclick="seleccionarTodasHoras()"
+                            style="background:rgba(37,99,235,0.06);color:#2563EB;font-size:12px;"><i
+                                class="fa-solid fa-check-double" style="margin-right:6px;"></i>Todas</button>
+                        <button class="doc-btn" onclick="deseleccionarTodasHoras()"
+                            style="background:rgba(239,68,68,0.08);color:#F87171;font-size:12px;border:1px solid rgba(239,68,68,0.2);"><i
+                                class="fa-solid fa-xmark" style="margin-right:6px;"></i>Ninguna</button>
+                    </div>
+                </div>
+
+                <!-- Exportar Excel -->
+                <div class="doc-card doc-full">
+                    <h3><i class="fa-solid fa-file-excel" style="color:#2563EB; margin-right:10px;"></i>Exportar Datos a
+                        Excel</h3>
+                    <p class="doc-sub">Descarga todos los datos de citas del sistema en formato Excel (.xlsx)</p>
+                    <div class="doc-export-bar">
+                        <div>
+                            <h4
+                                style="font-size:14px;font-weight:700;color:#2563EB;margin-bottom:4px;font-family:var(--font-display);">
+                                Filtros de exportación</h4>
+                            <p style="font-size:12px;color:#64748B;">Puedes exportar todos los datos o filtrar por
+                                doctor, fecha o estado</p>
+                        </div>
+                        <div id="statsExport" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+                    </div>
+                    <div class="doc-filter-row">
+                        <div class="doc-form-group">
+                            <label>Doctor</label>
+                            <select id="filtroDoctor">
+                                <option value="">Todos los doctores</option>
+                                <option>C.D. Manuel Jesús Romani Maldonado</option>
+                                <option>C.D. Elio Elvis Támara Trinidad</option>
+                                <option>C.D. Jimy Aldo Osorio Rosales</option>
+                                <option>C.D. Fernando Fredy Bustamante Tolentino</option>
+                                <option>C.D. Yolanda Guadalupe Aliaga Kriete</option>
+                            </select>
+                        </div>
+                        <div class="doc-form-group">
+                            <label>Desde</label>
+                            <input type="date" id="filtroDesde">
+                        </div>
+                        <div class="doc-form-group">
+                            <label>Hasta</label>
+                            <input type="date" id="filtroHasta">
+                        </div>
+                        <div class="doc-form-group">
+                            <label>Estado</label>
+                            <select id="filtroEstado">
+                                <option value="confirmada">Confirmada</option>
+                            </select>
+                        </div>
+                        <div class="doc-form-group" style="display:flex;align-items:flex-end;gap:10px;">
+                            <button class="doc-btn doc-btn-excel" onclick="exportarExcel()"><i
+                                    class="fa-solid fa-download" style="margin-right:8px;"></i>Exportar Excel</button>
+                            <button class="doc-btn doc-btn-primary" onclick="cargarPreviewCitas()"
+                                style="background:rgba(37,99,235,0.06);color:#2563EB;"><i class="fa-solid fa-eye"
+                                    style="margin-right:6px;"></i>Preview</button>
+                        </div>
+                    </div>
+                    <div id="previewCitas"></div>
+                </div>
+
+                <!-- Horarios Registrados -->
+                <div class="doc-card doc-full">
+                    <div
+                        style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px;">
+                        <div>
+                            <h3><i class="fa-solid fa-list" style="color:#2563EB; margin-right:10px;"></i>Horarios
+                                Registrados — <span id="subtitleDoctor" style="color:#2563EB"></span></h3>
+                            <p class="doc-sub">Cada hora muestra si está libre o quién tiene la cita asignada</p>
+                        </div>
+                        <button class="doc-btn" onclick="limpiarPanelActual()"
+                            style="background:rgba(220,38,38,0.05); color:#DC2626; border:1px solid rgba(220,38,38,0.12); font-size:13px; font-weight:600; padding:10px 18px; border-radius:10px; transition:all 0.2s ease;"
+                            onmouseover="this.style.background='rgba(220,38,38,0.1)';"
+                            onmouseout="this.style.background='rgba(220,38,38,0.05)';">
+                            <i class="fa-solid fa-eraser" style="margin-right:8px; opacity:0.8;"></i>Limpiar Panel
+                        </button>
+                        <button id="btnSyncDrive" class="doc-btn" onclick="sincronizarDrive()"
+                            style="background:rgba(37,99,235,0.06); color:#2563EB; border:1px solid rgba(37,99,235,0.15); font-size:13px; font-weight:600; padding:10px 18px; border-radius:10px; transition:all 0.2s ease;"
+                            onmouseover="this.style.background='rgba(37,99,235,0.12)';"
+                            onmouseout="this.style.background='rgba(37,99,235,0.06)';">
+                            <i class="fa-brands fa-google-drive" style="margin-right:8px;"></i>Sincronizar Drive
+                        </button>
+                    </div>
+                    <div id="listaHorarios">
+                        <div class="doc-empty">No hay horarios registrados</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
     </main>
 
     <!-- Footer -->
     <footer class="site-footer">
-        <p><i class="fa-solid fa-tooth" style="color: #5BA4B5; margin-right: 6px;"></i> DentalBot — Panel Unificado de Odontología</p>
+        <p><i class="fa-solid fa-tooth" style="color: #2563EB; margin-right: 8px;"></i> DentalBot — Panel Unificado de
+            Odontología</p>
     </footer>
 
     <script src="script.js"></script>
 </body>
+
 </html>

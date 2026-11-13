@@ -1,0 +1,14 @@
+node_modules/
+auth_info_baileys/
+auth_info/
+.wwebjs_auth/
+.wwebjs_cache/
+logs/
+scratch/
+*.pma
+.warmup_date
+
+# Archivos sensibles — NO subir a Git
+credenciales.json
+config.json
+horarios_panel.json
