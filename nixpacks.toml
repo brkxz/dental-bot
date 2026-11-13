@@ -1,0 +1,5 @@
+[phases.setup]
+aptPkgs = ["git", "build-essential", "python3"]
+
+[phases.install]
+cmds = ["npm install --production --no-audit --no-fund"]
