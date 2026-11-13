@@ -200,22 +200,34 @@ console.log('📅 Horarios cargados para', Object.keys(horariosPanel).length, 'd
 // ══════════════════════════════════════════════════════════════
 // Soporta credenciales como variable de entorno (producción) o archivo local (desarrollo)
 let googleCreds;
+let googleKeyFile = null;
 if (process.env.GOOGLE_CREDENTIALS_JSON) {
-    googleCreds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
-    // Asegurar que los \n literales en private_key sean saltos de línea reales
-    if (googleCreds.private_key) {
-        googleCreds.private_key = googleCreds.private_key.replace(/\\n/g, '\n');
+    try {
+        googleCreds = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON);
+        // Asegurar que los \n literales en private_key sean saltos de línea reales
+        if (googleCreds.private_key && !googleCreds.private_key.includes('\n')) {
+            googleCreds.private_key = googleCreds.private_key.replace(/\\n/g, '\n');
+        }
+        // Escribir a archivo temporal para máxima compatibilidad con Google Auth
+        const tmpCredsPath = path.join(process.env.DATA_DIR || '/tmp', 'google-creds.json');
+        fs.mkdirSync(path.dirname(tmpCredsPath), { recursive: true });
+        fs.writeFileSync(tmpCredsPath, JSON.stringify(googleCreds, null, 2));
+        googleKeyFile = tmpCredsPath;
+        console.log('🔑 Credenciales Google escritas a archivo temporal');
+    } catch (e) {
+        console.error('❌ Error parseando GOOGLE_CREDENTIALS_JSON:', e.message);
+        googleCreds = { client_email: '', private_key: '' };
     }
-    console.log('🔑 Credenciales Google cargadas desde env var');
 } else {
     googleCreds = require('./credenciales.json');
     console.log('🔑 Credenciales Google cargadas desde archivo local');
 }
 
-const auth = new google.auth.GoogleAuth({
-    credentials: { client_email: googleCreds.client_email, private_key: googleCreds.private_key },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-});
+const auth = new google.auth.GoogleAuth(
+    googleKeyFile
+        ? { keyFile: googleKeyFile, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] }
+        : { credentials: { client_email: googleCreds.client_email, private_key: googleCreds.private_key }, scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'] }
+);
 const sheets = google.sheets({ version: 'v4', auth });
 
 const MESES_ES = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
