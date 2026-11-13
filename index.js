@@ -1,3 +1,8 @@
+// ── Polyfill: crypto global para Node.js < 20 (requerido por Baileys) ──────
+if (!globalThis.crypto) {
+    globalThis.crypto = require('crypto').webcrypto;
+}
+
 // ── Filtrar mensajes ruidosos de libsignal (Signal Protocol) ──────────────
 const _originalConsoleLog = console.log;
 const _originalConsoleWarn = console.warn;
