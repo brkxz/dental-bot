@@ -2,6 +2,7 @@ app = "dental-bot-odontologia"
 primary_region = "mia"
 
 [build]
+  dockerfile = "Dockerfile"
 
 [env]
   PORT = "8080"
