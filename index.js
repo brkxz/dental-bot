@@ -1311,8 +1311,14 @@ async function connectWhatsApp() {
 
         // Cachear versión (no re-fetchear en cada reconexión)
         if (!_cachedVersion) {
-            const { version } = await fetchLatestBaileysVersion();
-            _cachedVersion = version;
+            try {
+                const { version } = await fetchLatestBaileysVersion();
+                _cachedVersion = version;
+                console.log('📡 Versión Baileys:', _cachedVersion);
+            } catch (e) {
+                console.log('⚠️ No se pudo obtener versión, usando fallback');
+                _cachedVersion = [2, 3000, 1015901307];
+            }
         }
 
         sock = makeWASocket({
@@ -1393,10 +1399,21 @@ async function connectWhatsApp() {
                     setTimeout(() => connectWhatsApp(), delay);
                 } else {
                     reconnectAttempts++;
-                    const delay = Math.min(5000 * Math.pow(1.5, reconnectAttempts), MAX_RECONNECT_DELAY);
-                    emitLog(`Desconectado (código: ${statusCode}). Reconectando en ${Math.round(delay/1000)}s...`, 'error');
-                    updateStatus('loading');
-                    setTimeout(() => connectWhatsApp(), delay);
+                    // Si no hay sesión previa y falla, limpiar y reintentar para forzar QR
+                    if (reconnectAttempts > 3 && !_authState?.creds?.me) {
+                        console.log('🔄 Sin sesión previa, limpiando para forzar QR...');
+                        try {
+                            if (fs.existsSync(AUTH_FOLDER)) fs.rmSync(AUTH_FOLDER, { recursive: true, force: true });
+                        } catch (e) { }
+                        resetAuthState();
+                        reconnectAttempts = 0;
+                        setTimeout(() => connectWhatsApp(), 3000);
+                    } else {
+                        const delay = Math.min(5000 * Math.pow(1.5, reconnectAttempts), MAX_RECONNECT_DELAY);
+                        emitLog(`Desconectado (código: ${statusCode}). Reconectando en ${Math.round(delay/1000)}s...`, 'error');
+                        updateStatus('loading');
+                        setTimeout(() => connectWhatsApp(), delay);
+                    }
                 }
             }
         });
