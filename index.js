@@ -1328,11 +1328,11 @@ async function connectWhatsApp() {
                 keys: keyStore, // Reutilizar el mismo key store
             },
             printQRInTerminal: false,
-            logger: pino({ level: 'silent' }),
+            logger: pino({ level: 'warn' }),  // Mostrar warnings para debugging
             browser: ['Ubuntu', 'Chrome', '114.0.0'],
             generateHighQualityLinkPreview: false,
             markOnlineOnConnect: false,
-            connectTimeoutMs: 60000,
+            connectTimeoutMs: 120000,
             defaultQueryTimeoutMs: 60000,
             retryRequestDelayMs: 500,
             shouldSyncHistoryMessage: () => false,
@@ -1376,6 +1376,10 @@ async function connectWhatsApp() {
 
             if (connection === 'close') {
                 isConnecting = false;
+                const actualError = lastDisconnect?.error;
+                console.log('🔴 Conexión cerrada. Error completo:', actualError?.message || 'sin mensaje');
+                console.log('🔴 Error tipo:', actualError?.constructor?.name, 'Boom?', actualError instanceof Boom);
+                if (actualError instanceof Boom) console.log('🔴 Boom statusCode:', actualError.output?.statusCode);
                 const statusCode = (lastDisconnect?.error instanceof Boom) ?
                     lastDisconnect.error.output.statusCode : 500;
                 const reason = DisconnectReason;
