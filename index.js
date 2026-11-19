@@ -201,12 +201,12 @@ const RESPUESTAS_FALLBACK = {
 
 function detectarIntencionFallback(texto) {
     const t = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
-    if (/\b(gracia|agradec|thank)\b/.test(t)) return 'gracias';
-    if (/\b(adios|chau|bye|nos vemos|hasta luego|hasta pronto)\b/.test(t)) return 'adios';
-    if (/\b(horario|hora|cuando|que dia|a que hora|abren)\b/.test(t)) return 'horario';
-    if (/\b(urgencia|emergencia|urgente|dolor|duele)\b/.test(t)) return 'urgencia';
-    if (/\b(ayuda|help|no entiendo|no se|como funciona|que hago|opciones)\b/.test(t)) return 'ayuda';
-    if (/^(ok|listo|entendido|ya|perfecto|vale|bien|si|sip|claro|dale)$/.test(t)) return 'ok';
+    if (/gracia|agradec|thank/.test(t)) return 'gracias';
+    if (/adios|chau|bye|nos vemos|hasta luego|hasta pronto/.test(t)) return 'adios';
+    if (/horario|cuando abren|que dia|a que hora/.test(t)) return 'horario';
+    if (/urgencia|emergencia|urgente|dolor|duele/.test(t)) return 'urgencia';
+    if (/ayuda|ayudenme|help|no entiendo|no se que|como funciona|que hago|opciones/.test(t)) return 'ayuda';
+    if (/^(ok|listo|entendido|ya|perfecto|vale|bien|si|sip|claro|dale|okey)$/.test(t)) return 'ok';
     return null;
 }
 
@@ -259,17 +259,16 @@ async function consultarIA(mensajeUsuario, stepActual, datosUsuario) {
 function necesitaIA(texto, step) {
     const t = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
 
-    // Patrones de conversación casual / preguntas
+    // Patrones de conversación casual / preguntas (sin \b final para coincidir con español)
     const patronesIA = [
-        /\b(gracia|agradec|thank)\b/,
-        /\b(adios|chau|bye|nos vemos|hasta luego|hasta pronto)\b/,
-        /\b(ayuda|help|no entiendo|no se|como funciona|que hago)\b/,
-        /\b(horario|cuando abren|que dia|a que hora)\b/,
-        /\b(urgencia|emergencia|urgente|dolor|duele|muela)\b/,
-        /\b(precio|costo|cuanto cuesta|cobran|pagar)\b/,
-        /\b(donde|direccion|ubicacion|como llego)\b/,
-        /\b(ok|listo|entendido|ya|perfecto|vale|bien|claro|dale|si|sip)\b/,
-        /\b(hola|hi|hey|que tal|como estas)\b/,
+        /gracia|agradec|thank/,
+        /adios|chau|bye|nos vemos|hasta luego|hasta pronto/,
+        /ayuda|ayudenme|help|no entiendo|no se que|como funciona|que hago/,
+        /horario|cuando abren|que dia|a que hora/,
+        /urgencia|emergencia|urgente|dolor|duele|muela/,
+        /precio|costo|cuanto cuesta|cobran|pagar/,
+        /donde queda|direccion|ubicacion|como llego/,
+        /^(ok|listo|entendido|ya|perfecto|vale|bien|claro|dale|si|sip|okey)$/,
     ];
 
     if (patronesIA.some(p => p.test(t))) return true;
