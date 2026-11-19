@@ -1056,7 +1056,7 @@ io.on('connection', (socket) => {
         emitLog(`Enviando recordatorio a ${paciente.nombre}...`, 'info');
         try {
             const consultorioP = paciente.consultorio || 'Odontología General';
-            const mensaje = `Hola *${paciente.nombre}* 👋, le recordamos que tiene una cita odontológica de *${paciente.vacuna}* programada para *mañana ${paciente.fecha}* a las *${paciente.hora}* 🕐.\n\n🏥 *Consultorio:* ${consultorioP}\n\n⚠️ *Por favor, llegue 10 minutos antes* de su cita.\n\n¡Le esperamos! 🦷`;
+            const mensaje = `Hola *${paciente.nombre}* 👋, le recordamos que tiene una cita odontológica de *${paciente.vacuna}* programada para *mañana ${paciente.fecha}* a las *${paciente.hora}* 🕐.\n\n🏥 *Consultorio:* ${consultorioP}\n\n⚠️ *Por favor, llegue 10 minutos antes* de su cita.\n\n🧻 *Recuerde traer papel higiénico* para su comodidad.\n\n¡Le esperamos! 🦷`;
             await sendMessageWithRetry(`${paciente.numeroWs}@s.whatsapp.net`, mensaje);
             emitLog(`Recordatorio enviado a ${paciente.nombre}.`, 'success');
             io.emit('paciente_enviado', { numeroWs: paciente.numeroWs });
@@ -1156,7 +1156,7 @@ function programarCron() {
             emitLog(`Revisión Diaria Automática (${botConfig.cronTime})...`, 'system');
             revisarYEnviarRecordatorios();
         }
-    });
+    }, { timezone: 'America/Lima' });
 }
 
 async function sendMessageWithRetry(chatId, mensaje, maxRetries = 2) {
@@ -1189,7 +1189,7 @@ async function revisarYEnviarRecordatorios() {
         let envios = 0;
         for (const p of pacientes) {
             const consultorioA = p.consultorio || 'Odontología General';
-            const mensaje = `Hola *${p.nombre}* 👋, le recordamos que tiene una cita odontológica de *${p.vacuna}* programada para *mañana ${p.fecha}* a las *${p.hora}* 🕐.\n\n🏥 *Consultorio:* ${consultorioA}\n\n⚠️ *Por favor, llegue 10 minutos antes* de su cita.\n\n¡Le esperamos! 🦷`;
+            const mensaje = `Hola *${p.nombre}* 👋, le recordamos que tiene una cita odontológica de *${p.vacuna}* programada para *mañana ${p.fecha}* a las *${p.hora}* 🕐.\n\n🏥 *Consultorio:* ${consultorioA}\n\n⚠️ *Por favor, llegue 10 minutos antes* de su cita.\n\n🧻 *Recuerde traer papel higiénico* para su comodidad.\n\n¡Le esperamos! 🦷`;
             emitLog(`Enviando a: ${p.nombre} (${p.numeroWs})`, 'info');
             await new Promise(r => setTimeout(r, 5000));
             try { await sendMessageWithRetry(`${p.numeroWs}@s.whatsapp.net`, mensaje); emitLog(`Enviado a ${p.nombre}.`, 'success'); envios++; }
