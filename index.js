@@ -1765,7 +1765,18 @@ async function connectWhatsApp() {
                     if (state.step === 'sin_citas') {
                         // ── IA: Si el mensaje es conversacional (gracias, preguntas, etc), usar IA ──
                         if (necesitaIA(text, state.step)) {
-                            response = await consultarIA(text, 'No hay citas disponibles. El paciente ya fue informado.', state.data);
+                            response = await consultarIA(text, 'NO hay citas disponibles. Las citas se abren los VIERNES a las 7:30 AM. NO le digas que escriba CITA ni MENU porque no funcionará. Solo recuérdale que vuelva el viernes a las 7:30 AM.', state.data);
+                            // Si la IA falla y el fallback menciona CITA, corregir
+                            if (response.includes('CITA') || response.includes('MENU')) {
+                                const intencion = detectarIntencionFallback(text);
+                                if (intencion === 'gracias') {
+                                    response = '😊 ¡Gracias a ti! Recuerda que las citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n\n🙏 ¡Te esperamos!';
+                                } else if (intencion === 'adios') {
+                                    response = '👋 ¡Hasta luego! Las citas se abren los *viernes a las 7:30 AM*. ¡Te esperamos!';
+                                } else {
+                                    response = '🦷 Actualmente *no hay citas disponibles*.\n\n📅 Las citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n\n🙏 ¡Te esperamos!';
+                                }
+                            }
                         } else {
                             const msgB = botConfig.modoViernes
                                 ? `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, gracias por escribirnos.\n\n🕐 El bot está *desactivado* por el momento. Las citas se habilitan los *viernes a las 7:30 a.m.*\n\n⏳ ¡Escríbenos *hoy mismo a las 7:30 a.m.* para reservar tu cita!\n\n*Gracias por tu paciencia.*`
