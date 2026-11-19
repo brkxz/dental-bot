@@ -67,14 +67,16 @@ const path = require('path');
 const fs = require('fs');
 
 // ══════════════════════════════════════════════════════════════
-//  ASISTENTE IA (Gemini Flash — gratis)
+//  ASISTENTE IA MULTI-PROVEEDOR (Gemini, Groq, DeepSeek — todos gratis)
+//  ⚠️ La IA NUNCA interfiere con el flujo de citas.
+//  Solo responde a conversación casual, preguntas y cuando el paciente
+//  está confundido. El flujo de agendamiento siempre tiene prioridad.
 // ══════════════════════════════════════════════════════════════
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = 'gemini-2.0-flash-lite';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+const IA_TIMEOUT_MS = 4000; // Máximo 4 segundos para respuesta IA
+let iaProviderIndex = 0; // Rotación entre proveedores
 
 const IA_SYSTEM_PROMPT = `Eres el asistente virtual del servicio de Odontología de un centro de salud en Perú.
-Tu nombre es "Bot de Odontología". Responde SIEMPRE en español, de forma amable, breve y profesional (máximo 2-3 oraciones).
+Tu nombre es "Bot de Odontología". Responde SIEMPRE en español, de forma amable, breve y profesional (máximo 2-3 oraciones cortas).
 
 CONTEXTO DEL BOT:
 - Este bot agenda citas de odontología por WhatsApp
@@ -92,19 +94,111 @@ REGLAS:
 - Si pregunta algo fuera del ámbito dental/citas: amablemente dile que solo puedes ayudar con temas de odontología y citas
 - NUNCA inventes datos de doctores, fechas o disponibilidad
 - NUNCA des información médica o diagnósticos
-- Usa emojis moderadamente (1-2 por mensaje)`;
+- Usa emojis moderadamente (1-2 por mensaje)
+- Responde en MÁXIMO 2-3 oraciones. Sé conciso.`;
 
-// Respuestas predefinidas (fallback cuando la IA no está disponible)
+// ── Proveedores de IA (se rotan automáticamente) ────────────
+function getProveedoresIA() {
+    const proveedores = [];
+
+    // 1. GEMINI (Google) — ~1500 req/día gratis
+    if (process.env.GEMINI_API_KEY) {
+        proveedores.push({
+            nombre: 'Gemini',
+            llamar: async (prompt) => {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${process.env.GEMINI_API_KEY}`;
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { maxOutputTokens: 150, temperature: 0.7 }
+                    })
+                });
+                if (!res.ok) throw new Error(`Gemini ${res.status}`);
+                const data = await res.json();
+                return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            }
+        });
+    }
+
+    // 2. GROQ (Llama 3) — ~30 req/min gratis, muy rápido
+    if (process.env.GROQ_API_KEY) {
+        proveedores.push({
+            nombre: 'Groq',
+            llamar: async (prompt) => {
+                const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.GROQ_API_KEY}` },
+                    body: JSON.stringify({
+                        model: 'llama-3.1-8b-instant',
+                        messages: [{ role: 'user', content: prompt }],
+                        max_tokens: 150, temperature: 0.7
+                    })
+                });
+                if (!res.ok) throw new Error(`Groq ${res.status}`);
+                const data = await res.json();
+                return data?.choices?.[0]?.message?.content?.trim();
+            }
+        });
+    }
+
+    // 3. DEEPSEEK — créditos gratis al registrarse
+    if (process.env.DEEPSEEK_API_KEY) {
+        proveedores.push({
+            nombre: 'DeepSeek',
+            llamar: async (prompt) => {
+                const res = await fetch('https://api.deepseek.com/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.DEEPSEEK_API_KEY}` },
+                    body: JSON.stringify({
+                        model: 'deepseek-chat',
+                        messages: [{ role: 'user', content: prompt }],
+                        max_tokens: 150, temperature: 0.7
+                    })
+                });
+                if (!res.ok) throw new Error(`DeepSeek ${res.status}`);
+                const data = await res.json();
+                return data?.choices?.[0]?.message?.content?.trim();
+            }
+        });
+    }
+
+    // 4. OPENROUTER (acceso a múltiples modelos gratis)
+    if (process.env.OPENROUTER_API_KEY) {
+        proveedores.push({
+            nombre: 'OpenRouter',
+            llamar: async (prompt) => {
+                const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}` },
+                    body: JSON.stringify({
+                        model: 'meta-llama/llama-3.1-8b-instruct:free',
+                        messages: [{ role: 'user', content: prompt }],
+                        max_tokens: 150, temperature: 0.7
+                    })
+                });
+                if (!res.ok) throw new Error(`OpenRouter ${res.status}`);
+                const data = await res.json();
+                return data?.choices?.[0]?.message?.content?.trim();
+            }
+        });
+    }
+
+    return proveedores;
+}
+
+// ── Respuestas predefinidas (último fallback, siempre funciona) ──
 const RESPUESTAS_FALLBACK = {
     gracias: '😊 ¡Gracias a ti por confiar en nuestro servicio de Odontología!\n\n👉 Si deseas agendar otra cita, escribe *CITA*.',
     adios: '👋 ¡Hasta luego! Fue un gusto atenderte.\n\n👉 Recuerda: las citas se abren los *viernes a las 7:30 AM*. Escribe *CITA* cuando necesites.',
     horario: '🕐 *Horario de citas:*\n\nLas citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n\n👉 Escribe *CITA* para comenzar.',
     urgencia: '🚨 *Para urgencias:*\n\nLos cupos adicionales se entregan *presencialmente* a las *7:00 AM* a las 2 primeras personas en llegar.\n\n⚠️ Serán atendidos después de los pacientes con cita.',
     ayuda: '🦷 *¿En qué puedo ayudarte?*\n\n1️⃣ Escribe *CITA* para agendar una cita\n2️⃣ Escribe *MENU* para ver las opciones\n3️⃣ Escribe *CANCELAR* si quieres reiniciar\n\n📞 Las citas se abren los *viernes a las 7:30 AM*.',
+    ok: '👍 ¡Perfecto! Si necesitas algo más, escribe *CITA* para agendar o *MENU* para ver opciones.',
     default: '🦷 ¡Hola! Soy el Bot de Odontología.\n\n👉 Escribe *CITA* para agendar una cita o *MENU* para ver las opciones.'
 };
 
-// Detectar intención del mensaje para fallback
 function detectarIntencionFallback(texto) {
     const t = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
     if (/\b(gracia|agradec|thank)\b/.test(t)) return 'gracias';
@@ -112,60 +206,60 @@ function detectarIntencionFallback(texto) {
     if (/\b(horario|hora|cuando|que dia|a que hora|abren)\b/.test(t)) return 'horario';
     if (/\b(urgencia|emergencia|urgente|dolor|duele)\b/.test(t)) return 'urgencia';
     if (/\b(ayuda|help|no entiendo|no se|como funciona|que hago|opciones)\b/.test(t)) return 'ayuda';
+    if (/^(ok|listo|entendido|ya|perfecto|vale|bien|si|sip|claro|dale)$/.test(t)) return 'ok';
     return null;
 }
 
-// Llamar a Gemini API
+// ── Función principal: consultar IA con rotación y timeout ──
 async function consultarIA(mensajeUsuario, stepActual, datosUsuario) {
-    if (!GEMINI_API_KEY) {
+    const proveedores = getProveedoresIA();
+
+    // Si no hay proveedores configurados, usar fallback directo
+    if (proveedores.length === 0) {
+        console.log('⚠️ [IA] Sin proveedores configurados, usando fallback');
         const intencion = detectarIntencionFallback(mensajeUsuario);
-        return intencion ? RESPUESTAS_FALLBACK[intencion] : RESPUESTAS_FALLBACK.default;
+        return RESPUESTAS_FALLBACK[intencion] || RESPUESTAS_FALLBACK.default;
     }
 
+    // Construir prompt con contexto
     const contextoStep = stepActual ? `El paciente está en el paso: "${stepActual}" del flujo de agendamiento.` : 'El paciente no está en ningún flujo activo.';
-    const contextoData = datosUsuario?.nombre ? `Datos del paciente: Nombre=${datosUsuario.nombre}, Edad=${datosUsuario.edad || 'no proporcionada'}, DNI=${datosUsuario.dni || 'no proporcionado'}` : '';
+    const contextoData = datosUsuario?.nombre ? `Datos del paciente: Nombre=${datosUsuario.nombre}, Edad=${datosUsuario.edad || '?'}, DNI=${datosUsuario.dni || '?'}` : '';
+    const prompt = `${IA_SYSTEM_PROMPT}\n\n${contextoStep}\n${contextoData}\n\nMensaje del paciente: "${mensajeUsuario}"`;
 
-    try {
-        const response = await fetch(GEMINI_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{ text: `${IA_SYSTEM_PROMPT}\n\n${contextoStep}\n${contextoData}\n\nMensaje del paciente: "${mensajeUsuario}"` }]
-                }],
-                generationConfig: {
-                    maxOutputTokens: 150,
-                    temperature: 0.7
-                }
-            })
-        });
-
-        if (!response.ok) {
-            console.log(`⚠️ [IA] Gemini API error ${response.status}, usando fallback`);
-            const intencion = detectarIntencionFallback(mensajeUsuario);
-            return intencion ? RESPUESTAS_FALLBACK[intencion] : RESPUESTAS_FALLBACK.default;
+    // Intentar proveedores con rotación (empezar desde donde se quedó)
+    for (let i = 0; i < proveedores.length; i++) {
+        const idx = (iaProviderIndex + i) % proveedores.length;
+        const prov = proveedores[idx];
+        try {
+            // Timeout: si la IA tarda más de 4 segundos, seguir al siguiente
+            const resultado = await Promise.race([
+                prov.llamar(prompt),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), IA_TIMEOUT_MS))
+            ]);
+            if (resultado) {
+                iaProviderIndex = (idx + 1) % proveedores.length; // Rotar para la próxima
+                console.log(`🤖 [IA:${prov.nombre}] Respuesta OK para: "${mensajeUsuario.substring(0, 30)}..."`);
+                return resultado;
+            }
+        } catch (err) {
+            console.log(`⚠️ [IA:${prov.nombre}] Error: ${err.message}, intentando siguiente...`);
         }
-
-        const data = await response.json();
-        const textoIA = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (textoIA) {
-            console.log(`🤖 [IA] Respuesta generada para: "${mensajeUsuario.substring(0, 30)}..."`);
-            return textoIA.trim();
-        }
-
-        const intencion = detectarIntencionFallback(mensajeUsuario);
-        return intencion ? RESPUESTAS_FALLBACK[intencion] : RESPUESTAS_FALLBACK.default;
-    } catch (err) {
-        console.log(`⚠️ [IA] Error: ${err.message}, usando fallback`);
-        const intencion = detectarIntencionFallback(mensajeUsuario);
-        return intencion ? RESPUESTAS_FALLBACK[intencion] : RESPUESTAS_FALLBACK.default;
     }
+
+    // Si todos los proveedores fallan, usar fallback
+    console.log('⚠️ [IA] Todos los proveedores fallaron, usando fallback');
+    const intencion = detectarIntencionFallback(mensajeUsuario);
+    return RESPUESTAS_FALLBACK[intencion] || RESPUESTAS_FALLBACK.default;
 }
 
-// Determinar si un mensaje necesita respuesta de IA (no encaja en el flujo)
+// ── Determinar si un mensaje necesita IA (NO encaja en el flujo) ──
+// ⚠️ IMPORTANTE: Esta función SOLO se llama en el bloque else final,
+// DESPUÉS de que todos los pasos del flujo de citas ya se verificaron.
+// El flujo de citas SIEMPRE tiene prioridad absoluta.
 function necesitaIA(texto, step) {
     const t = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
-    // Palabras que indican conversación fuera del flujo
+
+    // Patrones de conversación casual / preguntas
     const patronesIA = [
         /\b(gracia|agradec|thank)\b/,
         /\b(adios|chau|bye|nos vemos|hasta luego|hasta pronto)\b/,
@@ -174,18 +268,12 @@ function necesitaIA(texto, step) {
         /\b(urgencia|emergencia|urgente|dolor|duele|muela)\b/,
         /\b(precio|costo|cuanto cuesta|cobran|pagar)\b/,
         /\b(donde|direccion|ubicacion|como llego)\b/,
-        /\b(telefono|llamar|contacto|numero)\b/,
-        /\b(doctor|doctora|especialista|odontologo)\b/,
-        /\b(ok|listo|entendido|ya|perfecto|vale|bien)\b/,
+        /\b(ok|listo|entendido|ya|perfecto|vale|bien|claro|dale|si|sip)\b/,
         /\b(hola|hi|hey|que tal|como estas)\b/,
     ];
 
-    // Si el usuario está en un step y manda algo que parece pregunta o conversación
     if (patronesIA.some(p => p.test(t))) return true;
-
-    // Si el texto es una pregunta (tiene ?)
     if (texto.includes('?')) return true;
-
     return false;
 }
 
