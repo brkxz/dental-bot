@@ -67,6 +67,129 @@ const path = require('path');
 const fs = require('fs');
 
 // ══════════════════════════════════════════════════════════════
+//  ASISTENTE IA (Gemini Flash — gratis)
+// ══════════════════════════════════════════════════════════════
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL = 'gemini-2.0-flash-lite';
+const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+const IA_SYSTEM_PROMPT = `Eres el asistente virtual del servicio de Odontología de un centro de salud en Perú.
+Tu nombre es "Bot de Odontología". Responde SIEMPRE en español, de forma amable, breve y profesional (máximo 2-3 oraciones).
+
+CONTEXTO DEL BOT:
+- Este bot agenda citas de odontología por WhatsApp
+- El flujo es: Nombre → Edad → DNI → Doctor → Fecha → Hora → Celular → Confirmación
+- Las citas se abren los VIERNES a las 7:30 AM
+- Hay 2 consultorios: Odontología General (mayores de 11 años) y Odontopediatría (11 años o menos)
+- Los cupos adicionales se dan presencialmente a las 7:00 AM a las 2 primeras personas
+
+REGLAS:
+- Si el paciente dice "gracias", "muchas gracias", etc: responde amablemente y recuérdale que puede escribir CITA para agendar otra cita
+- Si pregunta sobre horarios: las citas se abren los viernes a las 7:30 AM por WhatsApp
+- Si pregunta sobre servicios: Odontología General y Odontopediatría
+- Si pregunta sobre urgencias: recomendar llegar a las 7:00 AM por cupos adicionales presenciales
+- Si está confundido en el flujo: explícale qué dato debe escribir según el paso en que está
+- Si pregunta algo fuera del ámbito dental/citas: amablemente dile que solo puedes ayudar con temas de odontología y citas
+- NUNCA inventes datos de doctores, fechas o disponibilidad
+- NUNCA des información médica o diagnósticos
+- Usa emojis moderadamente (1-2 por mensaje)`;
+
+// Respuestas predefinidas (fallback cuando la IA no está disponible)
+const RESPUESTAS_FALLBACK = {
+    gracias: '😊 ¡Gracias a ti por confiar en nuestro servicio de Odontología!\n\n👉 Si deseas agendar otra cita, escribe *CITA*.',
+    adios: '👋 ¡Hasta luego! Fue un gusto atenderte.\n\n👉 Recuerda: las citas se abren los *viernes a las 7:30 AM*. Escribe *CITA* cuando necesites.',
+    horario: '🕐 *Horario de citas:*\n\nLas citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n\n👉 Escribe *CITA* para comenzar.',
+    urgencia: '🚨 *Para urgencias:*\n\nLos cupos adicionales se entregan *presencialmente* a las *7:00 AM* a las 2 primeras personas en llegar.\n\n⚠️ Serán atendidos después de los pacientes con cita.',
+    ayuda: '🦷 *¿En qué puedo ayudarte?*\n\n1️⃣ Escribe *CITA* para agendar una cita\n2️⃣ Escribe *MENU* para ver las opciones\n3️⃣ Escribe *CANCELAR* si quieres reiniciar\n\n📞 Las citas se abren los *viernes a las 7:30 AM*.',
+    default: '🦷 ¡Hola! Soy el Bot de Odontología.\n\n👉 Escribe *CITA* para agendar una cita o *MENU* para ver las opciones.'
+};
+
+// Detectar intención del mensaje para fallback
+function detectarIntencionFallback(texto) {
+    const t = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
+    if (/\b(gracia|agradec|thank)\b/.test(t)) return 'gracias';
+    if (/\b(adios|chau|bye|nos vemos|hasta luego|hasta pronto)\b/.test(t)) return 'adios';
+    if (/\b(horario|hora|cuando|que dia|a que hora|abren)\b/.test(t)) return 'horario';
+    if (/\b(urgencia|emergencia|urgente|dolor|duele)\b/.test(t)) return 'urgencia';
+    if (/\b(ayuda|help|no entiendo|no se|como funciona|que hago|opciones)\b/.test(t)) return 'ayuda';
+    return null;
+}
+
+// Llamar a Gemini API
+async function consultarIA(mensajeUsuario, stepActual, datosUsuario) {
+    if (!GEMINI_API_KEY) {
+        const intencion = detectarIntencionFallback(mensajeUsuario);
+        return intencion ? RESPUESTAS_FALLBACK[intencion] : RESPUESTAS_FALLBACK.default;
+    }
+
+    const contextoStep = stepActual ? `El paciente está en el paso: "${stepActual}" del flujo de agendamiento.` : 'El paciente no está en ningún flujo activo.';
+    const contextoData = datosUsuario?.nombre ? `Datos del paciente: Nombre=${datosUsuario.nombre}, Edad=${datosUsuario.edad || 'no proporcionada'}, DNI=${datosUsuario.dni || 'no proporcionado'}` : '';
+
+    try {
+        const response = await fetch(GEMINI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{ text: `${IA_SYSTEM_PROMPT}\n\n${contextoStep}\n${contextoData}\n\nMensaje del paciente: "${mensajeUsuario}"` }]
+                }],
+                generationConfig: {
+                    maxOutputTokens: 150,
+                    temperature: 0.7
+                }
+            })
+        });
+
+        if (!response.ok) {
+            console.log(`⚠️ [IA] Gemini API error ${response.status}, usando fallback`);
+            const intencion = detectarIntencionFallback(mensajeUsuario);
+            return intencion ? RESPUESTAS_FALLBACK[intencion] : RESPUESTAS_FALLBACK.default;
+        }
+
+        const data = await response.json();
+        const textoIA = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (textoIA) {
+            console.log(`🤖 [IA] Respuesta generada para: "${mensajeUsuario.substring(0, 30)}..."`);
+            return textoIA.trim();
+        }
+
+        const intencion = detectarIntencionFallback(mensajeUsuario);
+        return intencion ? RESPUESTAS_FALLBACK[intencion] : RESPUESTAS_FALLBACK.default;
+    } catch (err) {
+        console.log(`⚠️ [IA] Error: ${err.message}, usando fallback`);
+        const intencion = detectarIntencionFallback(mensajeUsuario);
+        return intencion ? RESPUESTAS_FALLBACK[intencion] : RESPUESTAS_FALLBACK.default;
+    }
+}
+
+// Determinar si un mensaje necesita respuesta de IA (no encaja en el flujo)
+function necesitaIA(texto, step) {
+    const t = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
+    // Palabras que indican conversación fuera del flujo
+    const patronesIA = [
+        /\b(gracia|agradec|thank)\b/,
+        /\b(adios|chau|bye|nos vemos|hasta luego|hasta pronto)\b/,
+        /\b(ayuda|help|no entiendo|no se|como funciona|que hago)\b/,
+        /\b(horario|cuando abren|que dia|a que hora)\b/,
+        /\b(urgencia|emergencia|urgente|dolor|duele|muela)\b/,
+        /\b(precio|costo|cuanto cuesta|cobran|pagar)\b/,
+        /\b(donde|direccion|ubicacion|como llego)\b/,
+        /\b(telefono|llamar|contacto|numero)\b/,
+        /\b(doctor|doctora|especialista|odontologo)\b/,
+        /\b(ok|listo|entendido|ya|perfecto|vale|bien)\b/,
+        /\b(hola|hi|hey|que tal|como estas)\b/,
+    ];
+
+    // Si el usuario está en un step y manda algo que parece pregunta o conversación
+    if (patronesIA.some(p => p.test(t))) return true;
+
+    // Si el texto es una pregunta (tiene ?)
+    if (texto.includes('?')) return true;
+
+    return false;
+}
+
+// ══════════════════════════════════════════════════════════════
 //  SISTEMA DE LOGS DE CONVERSACIONES
 //  Guarda cada chat en logs/conversaciones/YYYY-MM-DD/PHONE.json
 // ══════════════════════════════════════════════════════════════
@@ -1560,7 +1683,8 @@ async function connectWhatsApp() {
                         response = `🚨 *Para casos de URGENCIA, sugerimos solicitar un cupo adicional.*\n\n📍 Los cupos adicionales se entregan de manera presencial todos los días en el consultorio de Odontología, a las *7:00 a.m.*, a las dos primeras personas en llegar.\n\n⚠️ *Ten en cuenta:*\n• Estos pacientes serán atendidos después de los pacientes con cita previa.\n\n🙏 Agradecemos mucho tu comprensión.`;
                     }
                     else if (state.step === 'completado' && !['menu', '0', 'cita'].includes(text.toLowerCase())) {
-                        response = `✨ *¡Gracias por confiar en servicio de Odontología!* ✨\n\nNos sentimos felices de cuidar tu sonrisa. Tu cita ya está agendada y registrada en nuestro sistema.\n\n👨‍⚕️ Nos vemos el día de tu consulta. ¡Que tengas un excelente día!\n\n_(Si deseas agendar otra cita, escribe *CITA* para empezar de nuevo)_`;
+                        // IA responde cuando el paciente ya completó su cita
+                        response = await consultarIA(text, 'completado', state.data);
                     }
                     else if (text.toUpperCase() === 'CANCELAR') {
                         response = `❌ *Se ha cancelado el registro de cita.*\n\nEscribe *CITA* para comenzar nuevamente o *MENU* para ver todas las opciones.`;
@@ -1929,7 +2053,21 @@ async function connectWhatsApp() {
                     }
                     else {
                         const step = state.step; const d = state.data;
-                        if (step === 'pedir_nombre') response = '❌ Escribe tu *Nombre y Apellido* completo:\n\n*Ejemplo:* Juan Pérez García';
+                        // Si el mensaje parece conversación/pregunta, usar IA en vez de error genérico
+                        if (necesitaIA(text, step)) {
+                            const stepDescripcion = {
+                                'pedir_nombre': 'necesita escribir su Nombre y Apellido',
+                                'pedir_edad': 'necesita escribir la edad del paciente',
+                                'pedir_dni': 'necesita escribir su DNI (8 dígitos)',
+                                'elegir_doctor': 'necesita elegir un doctor escribiendo el número',
+                                'elegir_fecha': 'necesita elegir una fecha escribiendo el número',
+                                'cita_hora': 'necesita elegir un horario escribiendo el número',
+                                'pedir_telefono': 'necesita escribir su número de celular (9 dígitos)'
+                            };
+                            const desc = stepDescripcion[step] || step;
+                            response = await consultarIA(text, desc, d);
+                        }
+                        else if (step === 'pedir_nombre') response = '❌ Escribe tu *Nombre y Apellido* completo:\n\n*Ejemplo:* Juan Pérez García';
                         else if (step === 'pedir_edad') response = '❌ Escribe una *edad válida* (ej. "11 meses", "1 año y 2 meses", o solo el número en años):';
                         else if (step === 'pedir_dni') response = '❌ El *DNI* debe tener *8 números*.';
                         else if (step === 'elegir_doctor') { const lista = (d.doctores || []).map((doc, i) => `${i + 1}️⃣ ${doc}`).join('\n'); response = `❌ Opción no válida.\n\n${lista}`; }
