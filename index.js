@@ -1763,11 +1763,16 @@ async function connectWhatsApp() {
                     }
 
                     if (state.step === 'sin_citas') {
-                        const msgB = botConfig.modoViernes
-                            ? `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, gracias por escribirnos.\n\n🕐 El bot está *desactivado* por el momento. Las citas se habilitan los *viernes a las 7:30 a.m.*\n\n⏳ ¡Escríbenos *hoy mismo a las 7:30 a.m.* para reservar tu cita!\n\n*Gracias por tu paciencia.*`
-                            : `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, lo sentimos mucho pero *ya no contamos con citas disponibles.*\n\n📞 *¡Escríbenos por favor el próximo viernes a las 7:30 a.m.!*\n\n*Gracias por su comprensión.*`;
-                        await replyConTimeout(jid, msgB);
-                        response = `🚨 *Para casos de URGENCIA, sugerimos solicitar un cupo adicional.*\n\n📍 Los cupos adicionales se entregan de manera presencial todos los días en el consultorio de Odontología, a las *7:00 a.m.*, a las dos primeras personas en llegar.\n\n⚠️ *Ten en cuenta:*\n• Estos pacientes serán atendidos después de los pacientes con cita previa.\n\n🙏 Agradecemos mucho tu comprensión.`;
+                        // ── IA: Si el mensaje es conversacional (gracias, preguntas, etc), usar IA ──
+                        if (necesitaIA(text, state.step)) {
+                            response = await consultarIA(text, 'No hay citas disponibles. El paciente ya fue informado.', state.data);
+                        } else {
+                            const msgB = botConfig.modoViernes
+                                ? `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, gracias por escribirnos.\n\n🕐 El bot está *desactivado* por el momento. Las citas se habilitan los *viernes a las 7:30 a.m.*\n\n⏳ ¡Escríbenos *hoy mismo a las 7:30 a.m.* para reservar tu cita!\n\n*Gracias por tu paciencia.*`
+                                : `🦷 *Bienvenido al servicio de Odontología* 🦷\n\n👋 Hola, lo sentimos mucho pero *ya no contamos con citas disponibles.*\n\n📞 *¡Escríbenos por favor el próximo viernes a las 7:30 a.m.!*\n\n*Gracias por su comprensión.*`;
+                            await replyConTimeout(jid, msgB);
+                            response = `🚨 *Para casos de URGENCIA, sugerimos solicitar un cupo adicional.*\n\n📍 Los cupos adicionales se entregan de manera presencial todos los días en el consultorio de Odontología, a las *7:00 a.m.*, a las dos primeras personas en llegar.\n\n⚠️ *Ten en cuenta:*\n• Estos pacientes serán atendidos después de los pacientes con cita previa.\n\n🙏 Agradecemos mucho tu comprensión.`;
+                        }
                     }
                     else if (state.step === 'completado' && !['menu', '0', 'cita'].includes(text.toLowerCase())) {
                         // IA responde cuando el paciente ya completó su cita
