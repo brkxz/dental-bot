@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>DentalBot</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: #0F172A;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    color: white;
+  }
+  .container { text-align: center; }
+  .icon { font-size: 60px; margin-bottom: 20px; animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.8; }
+  }
+  .title { font-size: 26px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.5px; }
+  .subtitle { color: #64748b; font-size: 14px; margin-bottom: 32px; }
+  .bar-wrap { width: 200px; height: 4px; background: #1e293b; border-radius: 99px; margin: 0 auto; overflow: hidden; }
+  .bar { height: 100%; width: 40%; background: linear-gradient(90deg, #2563EB, #7C3AED); border-radius: 99px; animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+</style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">🦷</div>
+    <div class="title">DentalBot</div>
+    <div class="subtitle">Panel de Recordatorios · Iniciando...</div>
+    <div class="bar-wrap"><div class="bar"></div></div>
+  </div>
+</body>
+</html>

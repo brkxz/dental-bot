@@ -1059,6 +1059,7 @@ io.on('connection', (socket) => {
             const mensaje = `Hola *${paciente.nombre}* 👋, le recordamos que tiene una cita odontológica de *${paciente.vacuna}* programada para *mañana ${paciente.fecha}* a las *${paciente.hora}* 🕐.\n\n🏥 *Consultorio:* ${consultorioP}\n\n⚠️ *Por favor, llegue 10 minutos antes* de su cita.\n\n¡Le esperamos! 🦷`;
             await sendMessageWithRetry(`${paciente.numeroWs}@s.whatsapp.net`, mensaje);
             emitLog(`Recordatorio enviado a ${paciente.nombre}.`, 'success');
+            io.emit('paciente_enviado', { numeroWs: paciente.numeroWs });
         } catch (error) { emitLog(`Error: ${error.message}`, 'error'); }
     });
     socket.on('logout', async () => {
@@ -1093,6 +1094,54 @@ io.on('connection', (socket) => {
             setTimeout(() => connectWhatsApp(), 2000);
             emitLog('Reconexión iniciada.', 'success');
         } catch (e) { emitLog('Error: ' + e.message, 'error'); }
+    });
+    socket.on('refresh_pacientes', async () => {
+        try {
+            const pacientes = await obtenerPacientesManana();
+            socket.emit('pacientes_data', pacientes);
+            emitLog(`Pacientes actualizados: ${pacientes.length} citas para mañana.`, 'info');
+        } catch (e) { emitLog('Error al refrescar pacientes: ' + e.message, 'error'); }
+    });
+    socket.on('send_free_message', async (data) => {
+        if (botState.status !== 'connected') {
+            socket.emit('free_message_sent', { ok: false, error: 'Bot no conectado a WhatsApp.' });
+            return;
+        }
+        try {
+            const chatId = `${data.numero}@s.whatsapp.net`;
+            await sendMessageWithRetry(chatId, data.mensaje);
+            emitLog(`Mensaje libre enviado a +${data.numero}`, 'success');
+            socket.emit('free_message_sent', { ok: true, numero: data.numero });
+        } catch (e) {
+            emitLog(`Error enviando mensaje libre: ${e.message}`, 'error');
+            socket.emit('free_message_sent', { ok: false, error: e.message });
+        }
+    });
+    socket.on('send_free_message_all', async (data) => {
+        if (botState.status !== 'connected') {
+            socket.emit('free_message_all_done', { ok: false, error: 'Bot no conectado a WhatsApp.' });
+            return;
+        }
+        try {
+            const pacientes = await obtenerPacientesManana();
+            let enviados = 0;
+            for (const p of pacientes) {
+                try {
+                    await sendMessageWithRetry(`${p.numeroWs}@s.whatsapp.net`, data.mensaje);
+                    enviados++;
+                    emitLog(`Mensaje enviado a ${p.nombre} (+${p.numeroWs})`, 'success');
+                    // Emitir evento de paciente enviado en tiempo real
+                    io.emit('paciente_enviado', { numeroWs: p.numeroWs });
+                    await new Promise(r => setTimeout(r, 1500)); // Delay entre mensajes
+                } catch (e) {
+                    emitLog(`Error con ${p.nombre}: ${e.message}`, 'error');
+                }
+            }
+            socket.emit('free_message_all_done', { ok: true, enviados, total: pacientes.length });
+            emitLog(`Mensaje masivo completado: ${enviados}/${pacientes.length}`, 'success');
+        } catch (e) {
+            socket.emit('free_message_all_done', { ok: false, error: e.message });
+        }
     });
 });
 
