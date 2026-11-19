@@ -226,13 +226,13 @@ function getProveedoresIA() {
 
 // ── Respuestas predefinidas (último fallback, siempre funciona) ──
 const RESPUESTAS_FALLBACK = {
-    gracias: '😊 ¡Gracias a ti por confiar en nuestro servicio de Odontología!\n\n👉 Si deseas agendar otra cita, escribe *CITA*.',
-    adios: '👋 ¡Hasta luego! Fue un gusto atenderte.\n\n👉 Recuerda: las citas se abren los *viernes a las 7:30 AM*. Escribe *CITA* cuando necesites.',
-    horario: '🕐 *Horario de citas:*\n\nLas citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n\n👉 Escribe *CITA* para comenzar.',
+    gracias: '😊 ¡Gracias a ti por confiar en nuestro servicio de Odontología!\n\n📅 Recuerda: las citas se abren los *viernes a las 7:30 AM*. ¡Te esperamos!',
+    adios: '👋 ¡Hasta luego! Fue un gusto atenderte.\n\n📅 Recuerda: las citas se abren los *viernes a las 7:30 AM*. ¡Te esperamos!',
+    horario: '🕐 *Horario de citas:*\n\nLas citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n\n💡 Ten tu DNI, nombre y celular listos para ser más rápido.',
     urgencia: '🚨 *Para urgencias:*\n\nLos cupos adicionales se entregan *presencialmente* a las *7:00 AM* a las 2 primeras personas en llegar.\n\n⚠️ Serán atendidos después de los pacientes con cita.',
-    ayuda: '🦷 *¿En qué puedo ayudarte?*\n\n1️⃣ Escribe *CITA* para agendar una cita\n2️⃣ Escribe *MENU* para ver las opciones\n3️⃣ Escribe *CANCELAR* si quieres reiniciar\n\n📞 Las citas se abren los *viernes a las 7:30 AM*.',
-    ok: '👍 ¡Perfecto! Si necesitas algo más, escribe *CITA* para agendar o *MENU* para ver opciones.',
-    default: '🦷 ¡Hola! Soy el Bot de Odontología.\n\n👉 Escribe *CITA* para agendar una cita o *MENU* para ver las opciones.'
+    ayuda: '🦷 *¿En qué puedo ayudarte?*\n\n📅 Las citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n💡 Ten tu DNI, nombre y celular listos para agendar más rápido.\n🚨 Para urgencias, ve presencialmente a las 7:00 AM por cupo adicional.',
+    ok: '👍 ¡Perfecto! Si necesitas algo más, escríbenos.\n\n📅 Las citas se abren los *viernes a las 7:30 AM*.',
+    default: '🦷 ¡Hola! Soy el Bot de Odontología.\n\n📅 Las citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n💡 Ten tu DNI, nombre y celular listos para agendar más rápido.'
 };
 
 function detectarIntencionFallback(texto) {
@@ -1783,12 +1783,31 @@ async function connectWhatsApp() {
                     const SALUDOS = ['menu', '0', 'hola', 'cita', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches'];
                     const esSaludo = SALUDOS.some(s => textNormSaludo === s || textNormSaludo.startsWith(s + ' ') || textNormSaludo.endsWith(' ' + s));
 
-                    // Bot desactivado
+                    // Bot desactivado — si el mensaje es conversacional (gracias, preguntas, etc), usar IA
+                    // en vez de repetir la bienvenida completa cada vez
                     if (!botConfig.botActivo && state.step !== 'sin_citas' && !['cancelar'].includes(textNormSaludo) && !esSaludo) {
                         userState[phone] = { step: 'sin_citas', data: {} };
-                        const bienvenida = await getBienvenida(false);
-                        await replyConTimeout(jid, bienvenida.msg);
-                        await replyConTimeout(jid, `🚨 *Para casos de URGENCIA, sugerimos solicitar un cupo adicional.*\n\n📍 Los cupos adicionales se entregan de manera presencial todos los días en el consultorio de Odontología, a las *7:00 a.m.*, a las dos primeras personas en llegar.\n\n⚠️ *Ten en cuenta:*\n• Estos pacientes serán atendidos después de los pacientes con cita previa.\n\n🙏 Agradecemos mucho tu comprensión.`);
+                        // Si es un mensaje conversacional, derivar a la IA
+                        if (necesitaIA(text, 'sin_citas')) {
+                            let iaResp = await consultarIA(text, 'NO hay citas disponibles. Las citas se abren los VIERNES a las 7:30 AM. NO le digas que escriba CITA ni MENU porque no funcionará. Solo recuérdale que vuelva el viernes a las 7:30 AM.', {});
+                            // Si la IA/fallback menciona CITA o MENU, corregir
+                            if (iaResp.includes('CITA') || iaResp.includes('MENU')) {
+                                const intencion = detectarIntencionFallback(text);
+                                if (intencion === 'gracias') {
+                                    iaResp = '😊 ¡Gracias a ti! Recuerda que las citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n\n🙏 ¡Te esperamos!';
+                                } else if (intencion === 'adios') {
+                                    iaResp = '👋 ¡Hasta luego! Las citas se abren los *viernes a las 7:30 AM*. ¡Te esperamos!';
+                                } else {
+                                    iaResp = '🦷 Actualmente *no hay citas disponibles*.\n\n📅 Las citas se abren los *viernes a las 7:30 AM* por este WhatsApp.\n\n🙏 ¡Te esperamos!';
+                                }
+                            }
+                            await replyConTimeout(jid, iaResp);
+                        } else {
+                            // No es conversacional → mostrar bienvenida completa + info urgencia
+                            const bienvenida = await getBienvenida(false);
+                            await replyConTimeout(jid, bienvenida.msg);
+                            await replyConTimeout(jid, `🚨 *Para casos de URGENCIA, sugerimos solicitar un cupo adicional.*\n\n📍 Los cupos adicionales se entregan de manera presencial todos los días en el consultorio de Odontología, a las *7:00 a.m.*, a las dos primeras personas en llegar.\n\n⚠️ *Ten en cuenta:*\n• Estos pacientes serán atendidos después de los pacientes con cita previa.\n\n🙏 Agradecemos mucho tu comprensión.`);
+                        }
                         return;
                     }
 
