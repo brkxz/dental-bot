@@ -248,6 +248,15 @@ function detectarIntencionFallback(texto) {
 
 // ── Función principal: consultar IA con rotación y timeout ──
 async function consultarIA(mensajeUsuario, stepActual, datosUsuario) {
+    // ── 🧠 PASO 1: Buscar en la base de conocimiento aprendido ──
+    try {
+        const respAprendida = buscarRespuestaAprendida(mensajeUsuario);
+        if (respAprendida) {
+            console.log(`🧠 [Aprendizaje] Usando respuesta aprendida, NO se gasta API`);
+            return respAprendida;
+        }
+    } catch (e) { /* nunca fallar por aprendizaje */ }
+
     const proveedores = getProveedoresIA();
 
     // Si no hay proveedores configurados, usar fallback directo
@@ -275,6 +284,8 @@ async function consultarIA(mensajeUsuario, stepActual, datosUsuario) {
             if (resultado) {
                 iaProviderIndex = (idx + 1) % proveedores.length; // Rotar para la próxima
                 console.log(`🤖 [IA:${prov.nombre}] Respuesta OK para: "${mensajeUsuario.substring(0, 30)}..."`);
+                // ── 🧠 PASO 2: Guardar respuesta para aprender ──
+                try { aprenderRespuesta(mensajeUsuario, resultado); } catch (e) { /* nunca fallar */ }
                 return resultado;
             }
         } catch (err) {
@@ -309,7 +320,133 @@ function necesitaIA(texto, step) {
 
     if (patronesIA.some(p => p.test(t))) return true;
     if (texto.includes('?')) return true;
+    // "Oye Denti" siempre necesita IA
+    if (esOyeDenti(texto)) return true;
     return false;
+}
+
+// ── Detectar "Oye Denti" — preguntas generales de odontología ──
+function esOyeDenti(texto) {
+    const t = texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
+    // Patrones: "oye denti", "hey denti", "denti", "ey denti", "oye denti,"
+    if (/^(oye|hey|ey|hola)?\s*denti[,:]?\s+/.test(t)) return true;
+    if (/^denti\s+/.test(t)) return true;
+    return false;
+}
+
+function extraerPreguntaDenti(texto) {
+    // Quitar el prefijo "oye denti" y devolver solo la pregunta
+    return texto.replace(/^(oye|hey|ey|hola)?\s*denti[,:]?\s+/i, '').trim();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SISTEMA DE AUTO-APRENDIZAJE
+//  Guarda preguntas y respuestas para responder sin IA en el futuro
+// ══════════════════════════════════════════════════════════════
+const CONOCIMIENTO_FILE = path.join(process.env.DATA_DIR || __dirname, 'conocimiento.json');
+
+function normalizarTexto(texto) {
+    return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function cargarConocimiento() {
+    try {
+        if (fs.existsSync(CONOCIMIENTO_FILE)) {
+            return JSON.parse(fs.readFileSync(CONOCIMIENTO_FILE, 'utf8'));
+        }
+    } catch (e) { console.log('⚠️ Error cargando conocimiento:', e.message); }
+    return { respuestas: [] };
+}
+
+function guardarConocimiento(db) {
+    try {
+        fs.writeFileSync(CONOCIMIENTO_FILE, JSON.stringify(db, null, 2), 'utf8');
+    } catch (e) { console.log('⚠️ Error guardando conocimiento:', e.message); }
+}
+
+// Buscar si ya tenemos una respuesta aprendida para esta pregunta
+function buscarRespuestaAprendida(pregunta) {
+    const db = cargarConocimiento();
+    const norm = normalizarTexto(pregunta);
+    if (norm.length < 4) return null; // Muy corto para buscar
+
+    // Buscar coincidencia exacta o muy similar
+    let mejorMatch = null;
+    let mejorScore = 0;
+
+    for (const entry of db.respuestas) {
+        const entryNorm = entry.preguntaNorm;
+        
+        // Coincidencia exacta
+        if (entryNorm === norm) {
+            entry.usos = (entry.usos || 0) + 1;
+            entry.ultimoUso = new Date().toISOString();
+            guardarConocimiento(db);
+            console.log(`🧠 [Aprendizaje] Respuesta encontrada (exacta, ${entry.usos} usos): "${pregunta.substring(0, 30)}..."`);
+            return entry.respuesta;
+        }
+
+        // Coincidencia parcial: si las palabras clave coinciden (>70%)
+        const palabrasNorm = norm.split(' ').filter(w => w.length > 2);
+        const palabrasEntry = entryNorm.split(' ').filter(w => w.length > 2);
+        if (palabrasNorm.length > 0 && palabrasEntry.length > 0) {
+            const comunes = palabrasNorm.filter(w => palabrasEntry.includes(w)).length;
+            const score = comunes / Math.max(palabrasNorm.length, palabrasEntry.length);
+            if (score > 0.7 && score > mejorScore && entry.usos >= 2) {
+                mejorScore = score;
+                mejorMatch = entry;
+            }
+        }
+    }
+
+    if (mejorMatch) {
+        mejorMatch.usos = (mejorMatch.usos || 0) + 1;
+        mejorMatch.ultimoUso = new Date().toISOString();
+        guardarConocimiento(db);
+        console.log(`🧠 [Aprendizaje] Respuesta similar (${(mejorScore*100).toFixed(0)}%, ${mejorMatch.usos} usos): "${pregunta.substring(0, 30)}..."`);
+        return mejorMatch.respuesta;
+    }
+
+    return null;
+}
+
+// Guardar una nueva pregunta-respuesta en la base de conocimiento
+function aprenderRespuesta(pregunta, respuesta) {
+    try {
+        const db = cargarConocimiento();
+        const norm = normalizarTexto(pregunta);
+        if (norm.length < 4) return; // Muy corto
+        
+        // No guardar si ya existe
+        const existe = db.respuestas.find(e => e.preguntaNorm === norm);
+        if (existe) {
+            existe.usos = (existe.usos || 0) + 1;
+            existe.ultimoUso = new Date().toISOString();
+            // Actualizar respuesta si tiene pocas consultas (aún aprendiendo)
+            if (existe.usos < 5) existe.respuesta = respuesta;
+            guardarConocimiento(db);
+            return;
+        }
+
+        // Agregar nueva entrada
+        db.respuestas.push({
+            pregunta: pregunta.substring(0, 200),
+            preguntaNorm: norm,
+            respuesta: respuesta,
+            usos: 1,
+            creadoEl: new Date().toISOString(),
+            ultimoUso: new Date().toISOString()
+        });
+
+        // Limitar a 500 entradas (borrar las más antiguas sin uso)
+        if (db.respuestas.length > 500) {
+            db.respuestas.sort((a, b) => (b.usos || 0) - (a.usos || 0));
+            db.respuestas = db.respuestas.slice(0, 500);
+        }
+
+        guardarConocimiento(db);
+        console.log(`🧠 [Aprendizaje] Nueva respuesta guardada: "${pregunta.substring(0, 40)}..." (total: ${db.respuestas.length})`);
+    } catch (e) { /* nunca crashear por aprendizaje */ }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1831,6 +1968,58 @@ async function connectWhatsApp() {
                     const textNormSaludo = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9\s]/g, '').trim();
                     const SALUDOS = ['menu', '0', 'hola', 'cita', 'buenas', 'buenos dias', 'buenas tardes', 'buenas noches'];
                     const esSaludo = SALUDOS.some(s => textNormSaludo === s || textNormSaludo.startsWith(s + ' ') || textNormSaludo.endsWith(' ' + s));
+
+                    // ══════════════════════════════════════════════════════════
+                    // 🦷 "OYE DENTI" — Preguntas generales de odontología
+                    // Funciona en TODOS los estados, bot activo o desactivado
+                    // ══════════════════════════════════════════════════════════
+                    if (esOyeDenti(text)) {
+                        const preguntaDenti = extraerPreguntaDenti(text);
+                        if (preguntaDenti.length > 2) {
+                            console.log(`🦷 [Oye Denti] Pregunta detectada: "${preguntaDenti.substring(0, 50)}"`);
+                            await simularEscritura(jid);
+                            
+                            // Prompt especializado para preguntas dentales generales
+                            const promptDenti = `Eres "Denti", un asistente dental amigable y experto. El paciente te pregunta directamente sobre odontología usando "Oye Denti". Responde de forma clara, útil y amigable. Usa emojis dentales. Si la pregunta NO es sobre odontología o salud bucal, responde amablemente que solo puedes ayudar con temas dentales.\n\nPregunta del paciente: "${preguntaDenti}"`;
+                            
+                            let respDenti;
+                            // Buscar en conocimiento aprendido primero
+                            try {
+                                respDenti = buscarRespuestaAprendida('denti:' + preguntaDenti);
+                            } catch(e) {}
+                            
+                            if (!respDenti) {
+                                const proveedores = getProveedoresIA();
+                                if (proveedores.length > 0) {
+                                    for (let i = 0; i < proveedores.length; i++) {
+                                        const idx = (iaProviderIndex + i) % proveedores.length;
+                                        const prov = proveedores[idx];
+                                        try {
+                                            respDenti = await Promise.race([
+                                                prov.llamar(promptDenti),
+                                                new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), IA_TIMEOUT_MS))
+                                            ]);
+                                            if (respDenti) {
+                                                iaProviderIndex = (idx + 1) % proveedores.length;
+                                                // Guardar para aprender
+                                                try { aprenderRespuesta('denti:' + preguntaDenti, respDenti); } catch(e) {}
+                                                break;
+                                            }
+                                        } catch (err) {
+                                            console.log(`⚠️ [Denti:${prov.nombre}] Error: ${err.message}`);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if (!respDenti) {
+                                respDenti = '🦷 ¡Hola! Soy *Denti*, tu asistente dental. 😊\n\nAhora mismo no puedo procesar tu pregunta, pero te recomiendo consultar con tu odontólogo para una respuesta precisa.\n\n💡 *Tip:* Escríbeme "Oye Denti" seguido de tu pregunta dental y te ayudaré con gusto.';
+                            }
+                            
+                            await replyConTimeout(jid, `🦷 *Denti responde:*\n\n${respDenti}`);
+                            return;
+                        }
+                    }
 
                     // Bot desactivado — si el mensaje es conversacional (gracias, preguntas, etc), usar IA
                     // en vez de repetir la bienvenida completa cada vez
