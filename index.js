@@ -1783,6 +1783,21 @@ async function connectWhatsApp() {
                         userState[phone] = bienvenida.hayAlgunasCitas ? { step: 'pedir_nombre', data: {} } : { step: 'sin_citas', data: {} };
                         response = bienvenida.msg;
                     }
+                    // ── IA: Interceptar mensajes conversacionales ANTES del flujo ──
+                    // Si el mensaje es claramente conversación (gracias, ayuda, preguntas)
+                    // y NO es un dato válido para el paso actual, usar IA
+                    else if (necesitaIA(text, state.step) && state.step !== 'sin_citas' && state.step !== 'completado') {
+                        const stepDescripcion = {
+                            'pedir_nombre': 'necesita escribir su Nombre y Apellido completo',
+                            'pedir_edad': 'necesita escribir la edad del paciente (ej: 25, o "2 años y 3 meses")',
+                            'pedir_dni': 'necesita escribir su DNI de 8 dígitos',
+                            'elegir_doctor': 'necesita elegir un doctor escribiendo el número de la lista',
+                            'elegir_fecha': 'necesita elegir una fecha escribiendo el número de la lista',
+                            'cita_hora': 'necesita elegir un horario escribiendo el número de la lista',
+                            'pedir_telefono': 'necesita escribir su número de celular de 9 dígitos que empiece con 9'
+                        };
+                        response = await consultarIA(text, stepDescripcion[state.step] || state.step, state.data);
+                    }
                     else if (state.step === 'pedir_nombre') {
                         const textLower = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
                         const palabrasInput = textLower.split(/\s+/);
